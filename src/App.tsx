@@ -1,0 +1,346 @@
+import React, { useState } from 'react';
+import { AuthScreen } from './components/AuthScreen';
+import { CompaniesView } from './components/CompaniesView';
+import { EmployeesView } from './components/EmployeesView';
+import { HolidaysView } from './components/HolidaysView';
+import { SchedulesView } from './components/SchedulesView';
+import { AppSection, Sidebar } from './components/Sidebar';
+import { TimesheetStudio } from './components/TimesheetStudio';
+import { useTimesheetStore } from './hooks/useTimesheetStore';
+import {
+  downloadAllCompaniesBackupJson,
+  downloadCompanyBackupJson,
+} from './utils/backupExport';
+import {
+  BillingCycle,
+  PlanId,
+  SUBSCRIPTION_PLANS,
+  getPlanById,
+} from './constants/plans';
+import { Check, LogOut, X } from 'lucide-react';
+
+const SECTION_TITLES: Record<AppSection, string> = {
+  studio: 'Estúdio de Folhas A4',
+  employees: 'Cadastro de Funcionários',
+  schedules: 'Jornadas de Trabalho',
+  holidays: 'Feriados Nacionais e Locais',
+  companies: 'Empresas e Fazendas',
+};
+
+export default function App() {
+  const store = useTimesheetStore();
+  const [activeSection, setActiveSection] = useState<AppSection>('studio');
+  const [focusedEmployeeId, setFocusedEmployeeId] = useState<string | null>(null);
+  const [includeFacultativos, setIncludeFacultativos] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [modalCycle, setModalCycle] = useState<BillingCycle>(
+    store.subscription?.billingCycle ?? 'monthly'
+  );
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  const currentPlan = getPlanById(store.subscription?.planId);
+  const planLabel = store.subscription
+    ? `Plano ${currentPlan.name} · ${
+        store.subscription.billingCycle === 'yearly' ? 'Anual' : 'Mensal'
+      }`
+    : 'Selecionar plano';
+
+  if (!store.authReady) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-sm text-slate-600">Carregando sessão...</div>
+      </div>
+    );
+  }
+
+  if (!store.user || !store.emailVerified) {
+    return (
+      <AuthScreen
+        pendingUser={store.user}
+        loading={store.authLoading}
+        error={store.authError}
+        message={store.authMessage}
+        onSignIn={store.signInWithEmail}
+        onRegister={store.registerWithEmail}
+        onResetPassword={store.sendResetPassword}
+        onResendVerification={store.resendVerificationEmail}
+        onRefreshVerification={store.refreshEmailVerification}
+        onLogout={store.logout}
+        onClearFeedback={store.clearAuthFeedback}
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row print:block print:bg-white print:min-h-0">
+      <Sidebar
+        activeSection={activeSection}
+        onSelectSection={setActiveSection}
+        companies={store.companies}
+        activeCompany={store.activeCompany}
+        onSelectCompany={store.selectCompany}
+        user={store.user}
+        onLogout={store.logout}
+        employeeCount={store.companyEmployees.length}
+        onExportActiveCompanyBackup={(company) =>
+          downloadCompanyBackupJson({
+            company,
+            schedules: store.schedules,
+            employees: store.employees,
+            customHolidays: store.customHolidays,
+            monthOverrides: store.monthOverrides,
+          })
+        }
+        planLabel={planLabel}
+        onOpenPlanModal={() => {
+          setModalCycle(store.subscription?.billingCycle ?? 'monthly');
+          setShowPlanModal(true);
+        }}
+      />
+
+      <div className="flex-1 min-w-0 flex flex-col print:block">
+        {/* Top Bar enxuta */}
+        <header className="no-print bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between gap-6">
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <span className="text-slate-400 truncate">
+              {store.activeCompany?.name ?? 'Sem empresa selecionada'}
+            </span>
+            <span className="text-slate-300" aria-hidden="true">
+              /
+            </span>
+            <h1 className="font-display font-semibold text-slate-900 whitespace-nowrap truncate">
+              {SECTION_TITLES[activeSection]}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {store.connectionWarning && (
+              <span className="text-xs text-amber-700 whitespace-nowrap">
+                Conexão instável com o banco
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={store.logout}
+              className="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sair
+            </button>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1400px] w-full mx-auto print:p-0 print:m-0 print:max-w-none">
+          {store.dataLoading ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-8 space-y-4">
+              <div className="h-5 w-48 bg-slate-100 rounded animate-pulse" />
+              <div className="h-10 w-full bg-slate-100 rounded animate-pulse" />
+              <div className="h-10 w-full bg-slate-100 rounded animate-pulse" />
+              <div className="h-10 w-3/4 bg-slate-100 rounded animate-pulse" />
+            </div>
+          ) : (
+            <>
+              {activeSection === 'studio' && (
+                <TimesheetStudio
+                  activeCompany={store.activeCompany}
+                  schedules={store.companySchedules}
+                  employees={store.companyEmployees}
+                  customHolidays={store.companyHolidays}
+                  monthOverrides={store.monthOverrides}
+                  includeFacultativos={includeFacultativos}
+                  onToggleFacultativos={setIncludeFacultativos}
+                  initialFocusEmployeeId={focusedEmployeeId}
+                  onSaveDayOverride={store.saveDayOverride}
+                  onClearMonthOverrides={store.clearMonthOverrides}
+                  onGoToCompanies={() => setActiveSection('companies')}
+                  onGoToEmployees={() => setActiveSection('employees')}
+                  onSeedExample={store.seedExampleCompany}
+                />
+              )}
+
+              {activeSection === 'employees' && (
+                <EmployeesView
+                  activeCompany={store.activeCompany}
+                  schedules={store.companySchedules}
+                  employees={store.companyEmployees}
+                  onSaveEmployee={store.saveEmployee}
+                  onDeleteEmployee={store.deleteEmployee}
+                  onGenerateForEmployee={(empId) => {
+                    setFocusedEmployeeId(empId);
+                    setActiveSection('studio');
+                  }}
+                  onGoToCompanies={() => setActiveSection('companies')}
+                  onGoToSchedules={() => setActiveSection('schedules')}
+                />
+              )}
+
+              {activeSection === 'schedules' && (
+                <SchedulesView
+                  activeCompany={store.activeCompany}
+                  schedules={store.companySchedules}
+                  onSaveSchedule={store.saveSchedule}
+                  onDeleteSchedule={store.deleteSchedule}
+                  onGoToCompanies={() => setActiveSection('companies')}
+                />
+              )}
+
+              {activeSection === 'holidays' && (
+                <HolidaysView
+                  activeCompany={store.activeCompany}
+                  customHolidays={store.companyHolidays}
+                  includeFacultativos={includeFacultativos}
+                  onToggleFacultativos={setIncludeFacultativos}
+                  onSaveCustomHoliday={store.saveCustomHoliday}
+                  onDeleteCustomHoliday={store.deleteCustomHoliday}
+                  onGoToCompanies={() => setActiveSection('companies')}
+                />
+              )}
+
+              {activeSection === 'companies' && (
+                <CompaniesView
+                  companies={store.companies}
+                  activeCompanyId={store.activeCompany?.id ?? ''}
+                  onSelectCompany={store.selectCompany}
+                  onSaveCompany={store.saveCompany}
+                  onDeleteCompany={store.deleteCompany}
+                  onSeedExample={store.seedExampleCompany}
+                  onExportCompanyBackup={(company) =>
+                    downloadCompanyBackupJson({
+                      company,
+                      schedules: store.schedules,
+                      employees: store.employees,
+                      customHolidays: store.customHolidays,
+                      monthOverrides: store.monthOverrides,
+                    })
+                  }
+                  onExportAllBackup={() =>
+                    downloadAllCompaniesBackupJson({
+                      companies: store.companies,
+                      schedules: store.schedules,
+                      employees: store.employees,
+                      customHolidays: store.customHolidays,
+                      monthOverrides: store.monthOverrides,
+                    })
+                  }
+                  onImportBackupJson={store.importBackupJson}
+                />
+              )}
+            </>
+          )}
+        </main>
+      </div>
+
+      {/* Modal de alteração de plano dentro do painel */}
+      {showPlanModal && (
+        <div className="no-print fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-3xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="font-display text-lg font-bold text-slate-900">
+                  Gerenciar Plano da Conta
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Uso atual: {store.companies.length} empresa(s) · {store.employees.length}{' '}
+                  funcionário(s)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPlanModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setModalCycle('monthly')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md cursor-pointer ${
+                  modalCycle === 'monthly'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600'
+                }`}
+              >
+                Mensal
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalCycle('yearly')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md cursor-pointer ${
+                  modalCycle === 'yearly'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600'
+                }`}
+              >
+                Anual (20% off)
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {SUBSCRIPTION_PLANS.map((plan) => {
+                const isCurrent =
+                  store.subscription?.planId === plan.id &&
+                  store.subscription?.billingCycle === modalCycle;
+                const price =
+                  modalCycle === 'monthly'
+                    ? plan.monthlyPrice
+                    : plan.yearlyMonthlyEquivalent;
+                return (
+                  <div
+                    key={plan.id}
+                    className={`rounded-xl p-4 flex flex-col justify-between ${
+                      isCurrent
+                        ? 'border-2 border-emerald-700 bg-emerald-50/30'
+                        : 'border border-slate-200 bg-white'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div>
+                        <div className="font-display font-bold text-slate-900">{plan.name}</div>
+                        <div className="text-xs text-slate-500">{plan.audience}</div>
+                      </div>
+                      <div className="font-display text-2xl font-bold font-mono-tabular text-slate-900">
+                        R$ {price}
+                        <span className="text-xs font-normal text-slate-500"> /mês</span>
+                      </div>
+                      <ul className="space-y-1.5 text-xs text-slate-700">
+                        {plan.features.map((f) => (
+                          <li key={f} className="flex items-start gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingPlan || isCurrent}
+                      onClick={async () => {
+                        setSavingPlan(true);
+                        try {
+                          await store.saveSubscriptionPlan(plan.id as PlanId, modalCycle);
+                          setShowPlanModal(false);
+                        } finally {
+                          setSavingPlan(false);
+                        }
+                      }}
+                      className={`mt-4 w-full py-2 px-3 rounded-lg text-xs font-semibold cursor-pointer ${
+                        isCurrent
+                          ? 'bg-emerald-100 text-emerald-800 cursor-default'
+                          : 'bg-slate-900 hover:bg-slate-800 text-white'
+                      }`}
+                    >
+                      {isCurrent ? 'Plano Atual' : `Selecionar ${plan.name}`}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

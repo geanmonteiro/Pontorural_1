@@ -274,7 +274,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
       {canShowForm && (
         <form
           onSubmit={handleSubmit}
-          className="bg-white border border-slate-200 rounded-xl p-6 space-y-5"
+          className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-5"
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
@@ -441,7 +441,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
               )}
             </div>
 
-            <div className="md:col-span-2 flex items-center pt-4">
+            <div className="md:col-span-2 flex items-center pt-1 md:pt-4">
               <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-800 cursor-pointer">
                 <input
                   type="checkbox"
@@ -638,8 +638,117 @@ export const UsersView: React.FC<UsersViewProps> = ({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <>
+            {/* Lista em cartões para Mobile (< md) */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredUsers.map((u) => {
+                const profileName =
+                  profileMap.get(u.profileId)?.name ?? 'Perfil não encontrado';
+                const allowedIds = u.allowedCompanyIds ?? [];
+                const enabledNames = allowedIds
+                  .map((cid) => companyMap.get(cid)?.name)
+                  .filter((n): n is string => Boolean(n));
+
+                return (
+                  <div key={u.id} className="p-4 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm text-slate-900 break-words">
+                          {u.displayName}
+                        </div>
+                        <div className="font-mono-tabular text-xs text-slate-600 break-all">
+                          {u.email}
+                        </div>
+                      </div>
+                      <span
+                        className={`text-xs font-semibold shrink-0 ${
+                          u.active ? 'text-emerald-700' : 'text-slate-400'
+                        }`}
+                      >
+                        {u.active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-700 space-y-1">
+                      <div>
+                        <span className="text-slate-500">Perfil: </span>
+                        <span className="font-medium text-slate-900">{profileName}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Empresas ({allowedIds.length}): </span>
+                        <span className="text-slate-700">
+                          {enabledNames.length > 0
+                            ? enabledNames.join(' · ')
+                            : 'Nenhuma empresa liberada'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Criado em: </span>
+                        <span className="font-mono-tabular text-slate-700">
+                          {formatTimestampBr(u.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {(canEdit || canDelete) && (
+                      <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(u)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Editar
+                          </button>
+                        )}
+                        {canDelete &&
+                          (confirmDeleteId === u.id ? (
+                            <div className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                              <span className="text-xs text-red-700">Remover?</span>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await onDeleteUser(u);
+                                  setConfirmDeleteId(null);
+                                }}
+                                className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                              >
+                                Sim
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="text-xs text-slate-500 hover:underline cursor-pointer"
+                              >
+                                Não
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(u.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-red-600 hover:bg-red-50 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Remover
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {filteredUsers.length === 0 && (
+                <div className="py-8 px-4 text-center text-sm text-slate-500">
+                  Nenhum usuário encontrado para o filtro aplicado.
+                </div>
+              )}
+            </div>
+
+            {/* Tabela Desktop (md+) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
                   <th className="py-2.5 px-4">Nome</th>
@@ -750,6 +859,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

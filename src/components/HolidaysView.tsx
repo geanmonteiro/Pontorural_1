@@ -161,7 +161,7 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
           {canShowForm && (
             <form
               onSubmit={handleSaveHoliday}
-              className="bg-white border border-slate-200 rounded-xl p-5 space-y-4"
+              className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-4"
             >
               <div className="flex items-center justify-between">
                 <h3 className="font-display text-base font-semibold text-slate-900">
@@ -314,24 +314,26 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
               Aplicar Carnaval e Corpus Christi automaticamente
             </label>
           </div>
-          <table className="w-full text-left border-collapse text-sm">
-            <tbody className="divide-y divide-slate-100">
-              {nationalHolidays.map((h) => {
-                const active = includeFacultativos || !h.isFacultativo;
-                return (
-                  <tr key={h.isoDate} className={active ? '' : 'opacity-50'}>
-                    <td className="py-2.5 px-4 font-mono-tabular text-slate-700 whitespace-nowrap">
-                      {formatDateBr(h.isoDate)}
-                    </td>
-                    <td className="py-2.5 px-4 font-medium text-slate-900">{h.name}</td>
-                    <td className="py-2.5 px-4 text-right text-xs text-slate-500 whitespace-nowrap">
-                      {h.isFacultativo ? 'Facultativo' : 'Nacional'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <tbody className="divide-y divide-slate-100">
+                {nationalHolidays.map((h) => {
+                  const active = includeFacultativos || !h.isFacultativo;
+                  return (
+                    <tr key={h.isoDate} className={active ? '' : 'opacity-50'}>
+                      <td className="py-2.5 px-3 sm:px-4 font-mono-tabular text-slate-700 whitespace-nowrap">
+                        {formatDateBr(h.isoDate)}
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 font-medium text-slate-900">{h.name}</td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right text-xs text-slate-500 whitespace-nowrap">
+                        {h.isFacultativo ? 'Facultativo' : 'Nacional'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

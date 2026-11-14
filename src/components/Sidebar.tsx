@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { User } from 'firebase/auth';
 import {
   Building2,
@@ -12,6 +12,7 @@ import {
   Upload,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react';
 import { Company } from '../types/timesheet';
 
@@ -43,6 +44,8 @@ interface SidebarProps {
   profileLabel?: string;
   planLabel?: string;
   onOpenPlanModal: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }
 
 const NAV_ITEMS: { id: AppSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -74,30 +77,61 @@ export const Sidebar: React.FC<SidebarProps> = ({
   profileLabel,
   planLabel,
   onOpenPlanModal,
+  mobileOpen,
+  onCloseMobile,
 }) => {
   const navItems = NAV_ITEMS.filter((item) => visibleSections.includes(item.id));
-  return (
-    <aside className="no-print w-full lg:w-[260px] shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between">
-      <div>
-        <div className="px-5 py-4 border-b border-slate-200">
-          <span className="font-display text-base font-bold tracking-tight text-slate-900 whitespace-nowrap block">
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseMobile();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [mobileOpen, onCloseMobile]);
+
+  const handleNavClick = (section: AppSection) => {
+    onSelectSection(section);
+    onCloseMobile();
+  };
+
+  const handleCompanySelect = (companyId: string) => {
+    onSelectCompany(companyId);
+  };
+
+  const sidebarContent = (isDrawer: boolean) => (
+    <div className="flex flex-col justify-between h-full">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-2">
+          <span className="font-display text-base font-bold tracking-tight text-slate-900 whitespace-nowrap truncate">
             PontoRural & Empresarial
           </span>
+          {isDrawer && (
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              aria-label="Fechar menu"
+              className="p-1.5 -mr-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Seletor de Empresa Ativa */}
         <div className="p-4 border-b border-slate-200">
           <label
-            htmlFor="company-switcher"
+            htmlFor={isDrawer ? 'company-switcher-mobile' : 'company-switcher'}
             className="block text-xs font-medium text-slate-500 mb-1.5"
           >
             Empresa ativa
           </label>
           {companies.length > 0 ? (
             <select
-              id="company-switcher"
+              id={isDrawer ? 'company-switcher-mobile' : 'company-switcher'}
               value={activeCompany?.id ?? ''}
-              onChange={(e) => onSelectCompany(e.target.value)}
+              onChange={(e) => handleCompanySelect(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
             >
               {companies.map((comp) => (
@@ -109,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : canCreateCompany ? (
             <button
               type="button"
-              onClick={() => onSelectSection('companies')}
+              onClick={() => handleNavClick('companies')}
               className="w-full text-left rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-600 hover:border-emerald-700 hover:text-emerald-700 transition-colors cursor-pointer"
             >
               + Cadastrar primeira empresa
@@ -128,9 +162,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   type="button"
                   onClick={() => onExportActiveCompanyBackup(activeCompany)}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 transition-colors cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 transition-colors whitespace-nowrap cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <Download className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   <span>Exportar Backup JSON</span>
                 </button>
               )}
@@ -147,7 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 type="button"
-                onClick={() => onSelectSection(item.id)}
+                onClick={() => handleNavClick(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
                   isActive
                     ? 'bg-emerald-50 text-emerald-800'
@@ -167,13 +201,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Conta do Usuário e Plano */}
-      <div className="p-4 border-t border-slate-200 hidden lg:block space-y-2.5">
+      <div className="p-4 border-t border-slate-200 space-y-2.5 shrink-0">
         {isWorkspaceOwner && planLabel && (
           <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 text-xs">
             <span className="text-slate-600 font-medium truncate">{planLabel}</span>
             <button
               type="button"
-              onClick={onOpenPlanModal}
+              onClick={() => {
+                onCloseMobile();
+                onOpenPlanModal();
+              }}
               className="text-emerald-700 font-semibold hover:underline shrink-0 cursor-pointer"
             >
               Alterar
@@ -194,12 +231,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           type="button"
           onClick={onLogout}
-          className="w-full inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:text-red-700 hover:border-red-200 hover:bg-red-50 transition-colors cursor-pointer"
+          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:text-red-700 hover:border-red-200 hover:bg-red-50 transition-colors whitespace-nowrap cursor-pointer"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          <LogOut className="w-3.5 h-3.5 shrink-0" />
           <span>Sair da conta</span>
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Sidebar fixa no Desktop (lg+) */}
+      <aside className="no-print hidden lg:flex lg:w-[260px] lg:sticky lg:top-0 lg:h-screen shrink-0 bg-white border-r border-slate-200 flex-col">
+        {sidebarContent(false)}
+      </aside>
+
+      {/* Drawer deslizante no Mobile/Tablet (< lg) */}
+      {mobileOpen && (
+        <div
+          className="no-print fixed inset-0 z-50 lg:hidden flex"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu de navegação"
+        >
+          <div
+            onClick={onCloseMobile}
+            className="fixed inset-0 bg-slate-900/45 transition-opacity"
+            aria-hidden="true"
+          />
+          <aside className="relative z-10 w-[min(86vw,300px)] max-w-full h-full bg-white border-r border-slate-200 shadow-xl flex flex-col">
+            {sidebarContent(true)}
+          </aside>
+        </div>
+      )}
+    </>
   );
 };

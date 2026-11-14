@@ -101,6 +101,9 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
   const [exportProgress, setExportProgress] = useState<PdfExportProgress | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const exportAbortRef = useRef<AbortController | null>(null);
+  const previewStageRef = useRef<HTMLDivElement | null>(null);
+  const [stageWidthPx, setStageWidthPx] = useState(820);
+  const [previewScaleMode, setPreviewScaleMode] = useState<'fit' | 'actual'>('fit');
 
   const [calibration, setCalibration] = useState<PrintCalibration>(() => {
     try {
@@ -173,6 +176,19 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
       null
     );
   }, [mode, employees, employeesToPrint, focusedEmployeeId]);
+
+  // Measure preview stage width to scale 210mm A4 sheet proportionally on mobile/tablet
+  useEffect(() => {
+    const el = previewStageRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const updateWidth = () => {
+      if (el.clientWidth > 0) setStageWidthPx(el.clientWidth);
+    };
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [activeCompany?.id, employees.length, previewEmployee?.id]);
 
   const getRowsForEmployee = (emp: Employee): GeneratedDayRow[] => {
     const sch = scheduleMap.get(emp.scheduleId);
@@ -493,13 +509,13 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
             {canPrint && (
               <button
                 type="button"
                 disabled={employeesToPrint.length === 0 || exportingPdf}
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors disabled:opacity-50 whitespace-nowrap cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors disabled:opacity-50 whitespace-nowrap cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 Imprimir
@@ -511,7 +527,7 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
                 type="button"
                 disabled={employeesToPrint.length === 0 || exportingPdf}
                 onClick={handleExportPdf}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors disabled:opacity-60 whitespace-nowrap cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors disabled:opacity-60 whitespace-nowrap cursor-pointer"
               >
                 {exportingPdf ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -647,9 +663,9 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
         )}
 
         {/* Área Principal: Controles Laterais + Mesa de Pré-visualização A4 */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
           {/* Coluna de Seleção e Ajustes do Mês */}
-          <div className="xl:col-span-4 space-y-4">
+          <div className="lg:col-span-4 space-y-4">
             {/* Lista de Funcionários para Impressão / Visualização */}
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -724,9 +740,9 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
               </ul>
             </div>
 
-            {/* Editor de Dia Selecionado na Folha */}
+            {/* Editor de Dia Selecionado na Folha (inline no desktop lg+) */}
             {canEditDay && editingDayRow && previewEmployee ? (
-              <div className="bg-white border border-emerald-700/40 rounded-xl p-4 space-y-3">
+              <div className="hidden lg:block bg-white border border-emerald-700/40 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <div className="text-sm font-semibold text-slate-900">
                     Ajustar Dia {editingDayRow.dayKey}/{String(month).padStart(2, '0')} (
@@ -880,32 +896,87 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
           </div>
 
           {/* Mesa de Pré-visualização A4 WYSIWYG */}
-          <div className="xl:col-span-8 bg-slate-200/75 border border-slate-200 rounded-xl p-4 sm:p-6 overflow-x-auto">
+          <div className="lg:col-span-8 bg-slate-200/75 border border-slate-200 rounded-xl p-3 sm:p-5 overflow-x-auto">
             {previewEmployee ? (
-              <div className="flex flex-col items-center space-y-3">
-                <div className="w-full max-w-[210mm] flex items-center justify-between text-xs text-slate-600">
-                  <span>
-                    Visualizando:{' '}
-                    <strong className="text-slate-900">{previewEmployee.name}</strong>
-                  </span>
-                  <span className="font-mono-tabular">
-                    A4 Retrato · {previewRows.length} dias ·{' '}
-                    {mode === 'batch' ? `${employeesToPrint.length} folha(s) no lote` : '1 folha'}
-                  </span>
-                </div>
-                <TimesheetA4Sheet
-                  company={activeCompany}
-                  employee={previewEmployee}
-                  schedule={scheduleMap.get(previewEmployee.scheduleId)}
-                  year={year}
-                  month={month}
-                  rows={previewRows}
-                  calibration={calibration}
-                  interactive={canEditDay}
-                  selectedDayKey={editingDayRow?.dayKey ?? null}
-                  onDayClick={handleOpenDayEditor}
-                />
-              </div>
+              (() => {
+                const a4WidthPx = 794;
+                const a4HeightPx = 1121;
+                const fittedScale = Math.min(1, Math.max(0.32, (stageWidthPx - 4) / a4WidthPx));
+                const activeScale = previewScaleMode === 'fit' ? fittedScale : 1;
+                const isScaled = activeScale < 0.99;
+
+                return (
+                  <div ref={previewStageRef} className="w-full flex flex-col items-center space-y-3">
+                    <div className="w-full max-w-[210mm] flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+                      <span className="truncate">
+                        Visualizando:{' '}
+                        <strong className="text-slate-900">{previewEmployee.name}</strong>
+                      </span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-mono-tabular">
+                          A4 · {previewRows.length} dias ·{' '}
+                          {mode === 'batch' ? `${employeesToPrint.length} folha(s)` : '1 folha'}
+                        </span>
+                        {(fittedScale < 0.98 || previewScaleMode === 'actual') && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewScaleMode((m) => (m === 'fit' ? 'actual' : 'fit'))
+                            }
+                            className="px-2.5 py-1 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium whitespace-nowrap cursor-pointer"
+                          >
+                            {previewScaleMode === 'fit' ? 'Zoom 100%' : 'Ajustar à tela'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {isScaled ? (
+                      <div
+                        style={{
+                          width: `${Math.round(a4WidthPx * activeScale)}px`,
+                          height: `${Math.round(a4HeightPx * activeScale)}px`,
+                        }}
+                        className="mx-auto overflow-hidden"
+                      >
+                        <div
+                          style={{
+                            width: `${a4WidthPx}px`,
+                            transform: `scale(${activeScale})`,
+                            transformOrigin: 'top left',
+                          }}
+                        >
+                          <TimesheetA4Sheet
+                            company={activeCompany}
+                            employee={previewEmployee}
+                            schedule={scheduleMap.get(previewEmployee.scheduleId)}
+                            year={year}
+                            month={month}
+                            rows={previewRows}
+                            calibration={calibration}
+                            interactive={canEditDay}
+                            selectedDayKey={editingDayRow?.dayKey ?? null}
+                            onDayClick={handleOpenDayEditor}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <TimesheetA4Sheet
+                        company={activeCompany}
+                        employee={previewEmployee}
+                        schedule={scheduleMap.get(previewEmployee.scheduleId)}
+                        year={year}
+                        month={month}
+                        rows={previewRows}
+                        calibration={calibration}
+                        interactive={canEditDay}
+                        selectedDayKey={editingDayRow?.dayKey ?? null}
+                        onDayClick={handleOpenDayEditor}
+                      />
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <div className="p-12 text-center text-sm text-slate-600">
                 Selecione um funcionário ao lado para visualizar a folha A4.
@@ -914,6 +985,122 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modal responsivo do Editor de Dia para Mobile/Tablet (< lg) */}
+      {canEditDay && editingDayRow && previewEmployee && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="no-print lg:hidden fixed inset-0 z-50 bg-slate-900/45 flex items-end sm:items-center justify-center p-3 sm:p-4"
+        >
+          <div className="bg-white border border-slate-200 rounded-xl w-full max-w-md p-4 space-y-3 shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <div className="text-sm font-semibold text-slate-900">
+                Ajustar Dia {editingDayRow.dayKey}/{String(month).padStart(2, '0')} (
+                {editingDayRow.weekdayShort})
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingDayRow(null)}
+                className="text-xs text-slate-500 hover:text-slate-900 cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div>
+                <span className="font-medium text-slate-700 block mb-1">Aplicar em:</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setOverrideScope('ALL')}
+                    className={`px-2.5 py-2 rounded-md border font-medium cursor-pointer ${
+                      overrideScope === 'ALL'
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    Toda a Empresa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOverrideScope('EMPLOYEE')}
+                    className={`px-2.5 py-2 rounded-md border font-medium truncate cursor-pointer ${
+                      overrideScope === 'EMPLOYEE'
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    Só este Colab.
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-medium text-slate-700 block mb-1">
+                  Marcação do Dia:
+                </label>
+                <select
+                  value={overrideStatus}
+                  onChange={(e) => setOverrideStatus(e.target.value as DayOverrideStatus)}
+                  className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm text-slate-900"
+                >
+                  <option value="auto">Automático (Calendário e Jornada)</option>
+                  <option value="work">Dia Útil (Fundo branco + intervalo)</option>
+                  <option value="rest">Folga (Fundo cinza + &quot;Folga&quot;)</option>
+                  <option value="holiday">Feriado (Fundo cinza + &quot;Feriado&quot;)</option>
+                  <option value="rest_holiday">Folga + Feriado (Fundo cinza + ambos)</option>
+                  <option value="blank">Em branco (Fundo branco sem horários)</option>
+                </select>
+              </div>
+
+              {overrideStatus === 'work' && (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <label>
+                    <span className="text-slate-600 block mb-0.5">Saída Manhã</span>
+                    <input
+                      type="text"
+                      maxLength={10}
+                      value={overrideMorningEnd}
+                      onChange={(e) => setOverrideMorningEnd(e.target.value)}
+                      className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 font-mono-tabular"
+                    />
+                  </label>
+                  <label>
+                    <span className="text-slate-600 block mb-0.5">Entrada Tarde</span>
+                    <input
+                      type="text"
+                      maxLength={10}
+                      value={overrideAfternoonStart}
+                      onChange={(e) => setOverrideAfternoonStart(e.target.value)}
+                      className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 font-mono-tabular"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditingDayRow(null)}
+                className="px-3.5 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={savingDay}
+                onClick={handleSaveDayOverride}
+                className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer"
+              >
+                {savingDay ? 'Salvando...' : 'Aplicar Ajuste'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Container exclusivo de Impressão em Lote (1 folha A4 por página, 100% escala real) */}
       <div className="hidden print-only-container">

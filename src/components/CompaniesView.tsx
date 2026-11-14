@@ -227,7 +227,7 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="bg-white border border-slate-200 rounded-xl p-6 space-y-4"
+          className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-4"
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h3 className="font-display text-base font-semibold text-slate-900">
@@ -348,7 +348,104 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Cartões responsivos para Mobile (< md) */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {companies.map((company) => {
+              const isActive = company.id === activeCompanyId;
+              return (
+                <div key={company.id} className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-slate-900 break-words">
+                        {company.name}
+                      </div>
+                      <div className="font-mono-tabular text-xs text-slate-600 mt-0.5">
+                        {company.cnpj}
+                      </div>
+                    </div>
+                    {isActive && (
+                      <span className="text-xs text-emerald-700 font-semibold shrink-0">
+                        Ativa
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed break-words">
+                    {company.address}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    {!isActive && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectCompany(company.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Ativar
+                      </button>
+                    )}
+                    {canBackup && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const filename = onExportCompanyBackup(company);
+                          setBackupNotice(`Backup da empresa salvo em ${filename}`);
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Backup JSON
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(company)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Editar
+                      </button>
+                    )}
+                    {canDelete &&
+                      (confirmDeleteId === company.id ? (
+                        <div className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                          <span className="text-xs text-red-700">Excluir tudo?</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await onDeleteCompany(company.id);
+                              setConfirmDeleteId(null);
+                            }}
+                            className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                          >
+                            Sim
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="text-xs text-slate-500 hover:underline cursor-pointer"
+                          >
+                            Não
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(company.id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-red-600 hover:bg-red-50 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Excluir
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tabela Desktop (md+) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">

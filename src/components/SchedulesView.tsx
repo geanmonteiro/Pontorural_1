@@ -155,7 +155,7 @@ export const SchedulesView: React.FC<SchedulesViewProps> = ({
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="bg-white border border-slate-200 rounded-xl p-6 space-y-5"
+          className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-5"
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h3 className="font-display text-base font-semibold text-slate-900">
@@ -212,11 +212,11 @@ export const SchedulesView: React.FC<SchedulesViewProps> = ({
             </div>
 
             <div className="md:col-span-2">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1">
                 <label className="block text-xs font-medium text-slate-700">
                   Texto da Jornada na Folha (linha &quot;Jornada de Trabalho:&quot;) *
                 </label>
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() =>
@@ -342,7 +342,82 @@ export const SchedulesView: React.FC<SchedulesViewProps> = ({
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Cartões responsivos para Mobile (< md) */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {schedules.map((sch) => (
+              <div key={sch.id} className="p-4 space-y-2.5">
+                <div className="font-semibold text-sm text-slate-900">{sch.name}</div>
+                <p className="text-xs text-slate-600 break-words">{sch.descriptionText}</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-500">Folgas: </span>
+                    <span className="text-slate-800">
+                      {sch.restDays.length > 0
+                        ? sch.restDays.map((d) => WEEKDAY_SHORT_PT[d]).join(', ')
+                        : 'Nenhuma'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Intervalo: </span>
+                    <span className="font-mono-tabular text-slate-800">
+                      {sch.showPreFilledInterval
+                        ? `${sch.defaultMorningEnd} / ${sch.defaultAfternoonStart}`
+                        : 'Em branco'}
+                    </span>
+                  </div>
+                </div>
+                {(canEdit || canDelete) && (
+                  <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(sch)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Editar
+                      </button>
+                    )}
+                    {canDelete &&
+                      (confirmDeleteId === sch.id ? (
+                        <div className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                          <span className="text-xs text-red-700">Excluir?</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await onDeleteSchedule(sch.id);
+                              setConfirmDeleteId(null);
+                            }}
+                            className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                          >
+                            Sim
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="text-xs text-slate-500 hover:underline cursor-pointer"
+                          >
+                            Não
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(sch.id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-red-600 hover:bg-red-50 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Excluir
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Tabela Desktop (md+) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">

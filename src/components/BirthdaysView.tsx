@@ -332,7 +332,7 @@ export const BirthdaysView: React.FC<BirthdaysViewProps> = ({
       )}
 
       {/* Métricas do mês */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-1">
           <div className="text-xs font-medium text-slate-500">Em {selectedMonthName}</div>
           <div className="font-display text-2xl font-bold font-mono-tabular text-slate-900">
@@ -492,7 +492,76 @@ export const BirthdaysView: React.FC<BirthdaysViewProps> = ({
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Lista em cartões para Mobile (< md) */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {monthBirthdays.map((item) => {
+              const isToday = item.statusTag === 'today';
+              const reminderLabel =
+                item.statusTag === 'today'
+                  ? 'Aniversaria hoje'
+                  : item.statusTag === 'tomorrow'
+                  ? 'Amanhã'
+                  : item.statusTag === 'upcoming'
+                  ? `Em ${item.daysUntil} dias`
+                  : item.statusTag === 'past'
+                  ? 'Já comemorado'
+                  : item.weekdayName;
+
+              return (
+                <div
+                  key={item.employee.id}
+                  className={`p-4 space-y-2 ${isToday ? 'bg-emerald-50/70' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-slate-900 break-words">
+                        {item.employee.name}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {item.employee.role} · Reg.{' '}
+                        <span className="font-mono-tabular">{item.employee.registrationNumber}</span>
+                        {!item.employee.active ? ' · Inativo' : ''}
+                      </div>
+                      {scope === 'all' && (
+                        <div className="text-xs text-slate-600 mt-0.5 truncate">
+                          {item.companyName}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-mono-tabular text-sm font-bold text-slate-900">
+                        {String(item.birthDay).padStart(2, '0')}/
+                        {String(item.birthMonth).padStart(2, '0')}
+                      </div>
+                      <div className="text-xs text-slate-500 font-mono-tabular">
+                        {item.turningAge} anos
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                    <span
+                      className={`font-semibold ${
+                        isToday
+                          ? 'text-emerald-800'
+                          : item.statusTag === 'tomorrow' ||
+                            (item.daysUntil !== null && item.daysUntil > 1 && item.daysUntil <= 7)
+                          ? 'text-amber-700'
+                          : 'text-slate-500 font-medium'
+                      }`}
+                    >
+                      {reminderLabel}
+                    </span>
+                    <span className="font-mono-tabular text-slate-500">
+                      Nasc.: {formatDateBr(item.employee.birthDate ?? '')}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tabela Desktop (md+) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">

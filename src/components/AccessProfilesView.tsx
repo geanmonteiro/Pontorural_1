@@ -199,7 +199,7 @@ export const AccessProfilesView: React.FC<AccessProfilesViewProps> = ({
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="bg-white border border-slate-200 rounded-xl p-6 space-y-6"
+          className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-6"
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
@@ -259,7 +259,7 @@ export const AccessProfilesView: React.FC<AccessProfilesViewProps> = ({
           </div>
 
           {/* Modelos rápidos */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 pt-1">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-medium text-slate-600">Aplicar base pronta:</span>
               {PRESET_PROFILES.map((preset) => (
@@ -267,14 +267,14 @@ export const AccessProfilesView: React.FC<AccessProfilesViewProps> = ({
                   key={preset.id}
                   type="button"
                   onClick={() => setSelectedPermissions([...preset.permissions])}
-                  className="px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium cursor-pointer"
                 >
                   {preset.name}
                 </button>
               ))}
             </div>
 
-            <div className="flex items-center gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
               <span className="font-mono-tabular text-slate-500">
                 {selectedPermissions.length}/{ALL_PERMISSION_KEYS.length} ações habilitadas
               </span>
@@ -423,7 +423,118 @@ export const AccessProfilesView: React.FC<AccessProfilesViewProps> = ({
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Cartões responsivos para Mobile (< md) */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {profiles.map((profile) => {
+              const enabledScreens = PERMISSION_GROUPS.filter((g) =>
+                profile.permissions.includes(g.viewKey)
+              );
+              const linkedCount = usersCountByProfile.get(profile.id) ?? 0;
+
+              return (
+                <div key={profile.id} className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-slate-900 break-words">
+                        {profile.name}
+                      </div>
+                      {profile.description && (
+                        <p className="text-xs text-slate-500 mt-0.5 break-words">
+                          {profile.description}
+                        </p>
+                      )}
+                    </div>
+                    <span className="font-mono-tabular text-xs font-medium text-slate-700 shrink-0">
+                      {linkedCount} {linkedCount === 1 ? 'usuário' : 'usuários'}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-slate-600 space-y-1">
+                    <div>
+                      <span className="font-mono-tabular font-semibold text-slate-800">
+                        {enabledScreens.length}/{PERMISSION_GROUPS.length} telas
+                      </span>{' '}
+                      ·{' '}
+                      <span className="font-mono-tabular">
+                        {profile.permissions.length}/{ALL_PERMISSION_KEYS.length} ações
+                      </span>
+                    </div>
+                    <div className="text-slate-500">
+                      {enabledScreens.map((s) => s.title.split(' (')[0]).join(' · ') || 'Nenhuma'}
+                    </div>
+                  </div>
+
+                  {(canCreate || canEdit || canDelete) && (
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => duplicateProfile(profile)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          Duplicar
+                        </button>
+                      )}
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => openEdit(profile)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Editar
+                        </button>
+                      )}
+                      {canDelete &&
+                        (confirmDeleteId === profile.id ? (
+                          <div className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                            <span className="text-xs text-red-700">Excluir?</span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (linkedCount > 0) {
+                                  setErrorMsg(
+                                    `O perfil "${profile.name}" está atribuído a ${linkedCount} usuário(s). Altere o perfil desses usuários antes de excluir.`
+                                  );
+                                  setShowForm(false);
+                                  setConfirmDeleteId(null);
+                                  return;
+                                }
+                                await onDeleteProfile(profile.id);
+                                setConfirmDeleteId(null);
+                              }}
+                              className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                            >
+                              Sim
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-xs text-slate-500 hover:underline cursor-pointer"
+                            >
+                              Não
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(profile.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-red-600 hover:bg-red-50 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Excluir
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tabela Desktop (md+) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">

@@ -23,7 +23,7 @@ import {
   formatBrlPrice,
   getPlanById,
 } from './constants/plans';
-import { Check, LogOut, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { Check, LogOut, Menu, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 
 const ALL_SECTIONS: AppSection[] = [
   'studio',
@@ -59,6 +59,7 @@ export default function App() {
     store.subscription?.billingCycle ?? 'monthly'
   );
   const [savingPlan, setSavingPlan] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const visibleSections = useMemo(
     () => ALL_SECTIONS.filter((sec) => store.can(getSectionViewKey(sec))),
@@ -164,43 +165,56 @@ export default function App() {
           setModalCycle(store.subscription?.billingCycle ?? 'monthly');
           setShowPlanModal(true);
         }}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
       />
 
       <div className="flex-1 min-w-0 flex flex-col print:block">
-        {/* Top Bar enxuta */}
-        <header className="no-print bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2 text-sm min-w-0">
-            <span className="text-slate-400 truncate">
-              {store.activeCompany?.name ?? 'Sem empresa selecionada'}
-            </span>
-            <span className="text-slate-300" aria-hidden="true">
-              /
-            </span>
-            <h1 className="font-display font-semibold text-slate-900 whitespace-nowrap truncate">
-              {visibleSections.length > 0
-                ? SECTION_TITLES[effectiveSection]
-                : 'Acesso Restrito'}
-            </h1>
+        {/* Top Bar enxuta e responsiva */}
+        <header className="no-print sticky top-0 z-30 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between gap-3 sm:gap-6">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Abrir menu de navegação"
+              className="lg:hidden p-2 -ml-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 shrink-0 cursor-pointer"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
+              <span className="text-xs sm:text-sm text-slate-500 sm:text-slate-400 truncate">
+                {store.activeCompany?.name ?? 'Sem empresa selecionada'}
+              </span>
+              <span className="hidden sm:inline text-slate-300" aria-hidden="true">
+                /
+              </span>
+              <h1 className="font-display text-sm sm:text-base font-semibold text-slate-900 truncate">
+                {visibleSections.length > 0
+                  ? SECTION_TITLES[effectiveSection]
+                  : 'Acesso Restrito'}
+              </h1>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {store.connectionWarning && (
-              <span className="text-xs text-amber-700 whitespace-nowrap">
+              <span className="hidden sm:inline text-xs text-amber-700 whitespace-nowrap">
                 Conexão instável com o banco
               </span>
             )}
             <button
               type="button"
               onClick={store.logout}
-              className="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 cursor-pointer"
+              className="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
-              Sair
+              <span className="hidden min-[380px]:inline">Sair</span>
             </button>
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1400px] w-full mx-auto print:p-0 print:m-0 print:max-w-none">
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 max-w-[1400px] w-full mx-auto print:p-0 print:m-0 print:max-w-none">
           {store.dataLoading ? (
             <div className="bg-white border border-slate-200 rounded-xl p-8 space-y-4">
               <div className="h-5 w-48 bg-slate-100 rounded animate-pulse" />
@@ -393,8 +407,8 @@ export default function App() {
 
       {/* Modal de alteração de plano dentro do painel */}
       {showPlanModal && (
-        <div className="no-print fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-xl max-w-3xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+        <div className="no-print fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-3xl w-full p-4 sm:p-6 space-y-5 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h2 className="font-display text-lg font-bold text-slate-900">
@@ -439,7 +453,7 @@ export default function App() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {SUBSCRIPTION_PLANS.map((plan) => {
                 const isCurrent =
                   store.subscription?.planId === plan.id &&

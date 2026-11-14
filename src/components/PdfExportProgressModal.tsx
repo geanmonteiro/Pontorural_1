@@ -45,9 +45,9 @@ export const PdfExportProgressModal: React.FC<PdfExportProgressModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="pdf-export-modal-title"
-      className="no-print fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-[1px] flex items-center justify-center p-4"
+      className="no-print fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-[1px] flex items-center justify-center p-3 sm:p-4"
     >
-      <div className="bg-white border border-slate-200 rounded-xl max-w-xl w-full p-6 space-y-5 shadow-lg">
+      <div className="bg-white border border-slate-200 rounded-xl max-w-xl w-full p-4 sm:p-6 space-y-5 shadow-lg max-h-[92vh] overflow-y-auto">
         {/* Cabeçalho */}
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3 min-w-0">

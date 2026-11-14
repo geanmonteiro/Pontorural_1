@@ -373,7 +373,7 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
           }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          className={`bg-white border-2 border-dashed rounded-xl p-10 text-center space-y-4 transition-colors ${
+          className={`bg-white border-2 border-dashed rounded-xl p-6 sm:p-10 text-center space-y-4 transition-colors ${
             isDragging ? 'border-emerald-700 bg-emerald-50/40' : 'border-slate-300'
           }`}
         >
@@ -409,7 +409,7 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
       ) : (
         <>
           {/* Painel de Mapeamento de Colunas e Configurações */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div className="space-y-0.5 min-w-0">
                 <div className="flex items-center gap-2">
@@ -617,7 +617,91 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
 
           {/* Tabela de Pré-visualização */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Cartões responsivos para Mobile (< md) */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredPreviewRows.map((row) => {
+                const hasErrors = row.errors.length > 0;
+                const willSkip = duplicateStrategy === 'skip' && Boolean(row.existingEmployeeId);
+                const checked =
+                  !hasErrors && !willSkip && !excludedRowIndexes.includes(row.rowIndex);
+
+                return (
+                  <div
+                    key={row.rowIndex}
+                    className={`p-4 space-y-2 text-xs ${hasErrors ? 'bg-red-50/40' : ''}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <label className="flex items-start gap-2.5 min-w-0 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          disabled={hasErrors || willSkip}
+                          checked={checked}
+                          onChange={() => toggleRowIncluded(row.rowIndex)}
+                          className="mt-0.5 rounded border-slate-300 text-emerald-700 focus:ring-emerald-700 disabled:opacity-40 cursor-pointer"
+                        />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm text-slate-900 break-words">
+                            {row.name || <span className="text-red-600">Sem nome</span>}
+                          </div>
+                          <div className="text-slate-500">
+                            Linha <span className="font-mono-tabular">{row.rowIndex}</span> · Reg.{' '}
+                            <span className="font-mono-tabular">
+                              {row.registrationNumber || '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </label>
+                      <span className="shrink-0 font-medium">
+                        {hasErrors ? (
+                          <span className="text-red-700">Erro</span>
+                        ) : willSkip ? (
+                          <span className="text-slate-500">Ignorar</span>
+                        ) : row.existingEmployeeId ? (
+                          <span className="text-amber-700">Atualizar</span>
+                        ) : (
+                          <span className="text-emerald-700">Novo</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-slate-700 pl-6">
+                      <div>
+                        <span className="text-slate-500">CPF: </span>
+                        <span className="font-mono-tabular">{row.cpf || 'Inválido'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Admissão: </span>
+                        <span className="font-mono-tabular">{formatDateBr(row.admissionDate)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Nasc.: </span>
+                        <span className="font-mono-tabular">
+                          {row.birthDate ? formatDateBr(row.birthDate) : '—'}
+                        </span>
+                      </div>
+                      <div className="truncate">
+                        <span className="text-slate-500">Cargo: </span>
+                        <span>{row.role || '—'}</span>
+                      </div>
+                    </div>
+
+                    {hasErrors && (
+                      <div className="pl-6 text-red-700 font-medium">
+                        {row.errors.join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {filteredPreviewRows.length === 0 && (
+                <div className="py-8 px-4 text-center text-sm text-slate-500">
+                  Nenhuma linha encontrada para este filtro.
+                </div>
+              )}
+            </div>
+
+            {/* Tabela Desktop (md+) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">

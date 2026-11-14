@@ -134,9 +134,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   // Tela de confirmação de e-mail pendente
   if (pendingUser && !pendingUser.emailVerified) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col justify-between px-6 py-8">
-        <header className="max-w-5xl w-full mx-auto flex items-center justify-between gap-8 border-b border-slate-200 pb-4">
-          <span className="font-display text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0">
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between px-4 sm:px-6 py-5 sm:py-8">
+        <header className="max-w-5xl w-full mx-auto flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
+          <span className="font-display text-base sm:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0">
             PontoRural & Empresarial
           </span>
           <span className="text-xs text-slate-500 whitespace-nowrap">
@@ -205,7 +205,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </div>
         </main>
 
-        <footer className="max-w-5xl w-full mx-auto border-t border-slate-200 pt-4 text-xs text-slate-500 flex items-center justify-between">
+        <footer className="max-w-5xl w-full mx-auto border-t border-slate-200 pt-4 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-center sm:text-left">
           <span>PontoRural & Empresarial</span>
           <span>Compatível com qualquer empresa ou propriedade rural</span>
         </footer>
@@ -214,14 +214,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between px-6 py-8">
-      {/* Top Bar de 3 zonas */}
-      <header className="max-w-6xl w-full mx-auto flex items-center justify-between gap-8 border-b border-slate-200 pb-4">
-        <span className="font-display text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between px-4 sm:px-6 py-5 sm:py-8">
+      {/* Top Bar de 3 zonas responsiva */}
+      <header className="max-w-6xl w-full mx-auto flex items-center justify-between gap-3 md:gap-8 border-b border-slate-200 pb-4">
+        <span className="font-display text-[15px] sm:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0">
           PontoRural & Empresarial
         </span>
 
-        <nav className="flex items-center gap-6 text-sm font-medium text-slate-600">
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
           <button
             type="button"
             onClick={() => navigateTo('login')}
@@ -255,29 +255,38 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </button>
         </nav>
 
-        <div className="shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
+          {view !== 'plans' && (
+            <button
+              type="button"
+              onClick={() => navigateTo('plans')}
+              className="md:hidden text-xs font-medium text-slate-600 hover:text-slate-900 whitespace-nowrap cursor-pointer"
+            >
+              Planos
+            </button>
+          )}
           {view === 'plans' || view === 'register' ? (
             <button
               type="button"
               onClick={() => navigateTo('login')}
-              className="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-900 whitespace-nowrap cursor-pointer"
+              className="px-3.5 sm:px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-900 whitespace-nowrap cursor-pointer"
             >
-              Já sou cliente
+              Entrar
             </button>
           ) : (
             <button
               type="button"
               onClick={() => navigateTo('register')}
-              className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold whitespace-nowrap cursor-pointer"
+              className="px-3.5 sm:px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold whitespace-nowrap cursor-pointer"
             >
-              Criar Usuário
+              Criar Conta
             </button>
           )}
         </div>
       </header>
 
       {/* Conteúdo Principal: Escolha de Planos OU Login / Cadastro */}
-      <main className="max-w-6xl w-full mx-auto py-10">
+      <main className="max-w-6xl w-full mx-auto py-6 sm:py-10">
         {view === 'plans' ? (
           <section className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -324,7 +333,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6 items-stretch">
               {SUBSCRIPTION_PLANS.map((plan) => {
                 const price =
                   billingCycle === 'monthly'
@@ -409,10 +418,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </div>
           </section>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
             {/* Formulário de Login / Criar Conta / Redefinir Senha */}
             <div className="lg:col-span-6">
-              <div className="bg-white border border-slate-200 rounded-xl p-7 sm:p-9 shadow-sm max-w-md w-full mx-auto lg:mx-0 space-y-6">
+              <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-8 shadow-sm max-w-md w-full mx-auto lg:mx-0 space-y-6">
                 {view === 'register' && selectedPlan && (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-2">
                     <div className="flex items-center justify-between gap-3">
@@ -668,12 +677,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
             {/* Resumo Visual do Sistema */}
             <div className="lg:col-span-6 space-y-5">
-              <div className="bg-white border border-slate-200 rounded-xl p-6">
-                <div className="flex items-center justify-between text-xs text-slate-500 pb-3 border-b border-slate-100 mb-4">
+              <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pb-3 border-b border-slate-100 mb-4">
                   <span>Modelo A4 Replicado com Fidelidade</span>
                   <span className="font-mono-tabular">210 × 297 mm</span>
                 </div>
-                <div className="border border-slate-900 text-[10px] font-sans text-slate-900 bg-white">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[360px] border border-slate-900 text-[10px] font-sans text-slate-900 bg-white">
                   <div className="border-b border-slate-900 px-2 py-1 font-bold">
                     EMPREGADOR: RAZÃO SOCIAL DA EMPRESA - 00.000.000/0001-00
                   </div>
@@ -733,6 +743,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     </div>
                   </div>
                 </div>
+                </div>
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
                   <span className="inline-flex items-center gap-1.5">
                     <CalendarCheck2 className="w-3.5 h-3.5 text-emerald-700" />
@@ -749,7 +760,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         )}
       </main>
 
-      <footer className="max-w-6xl w-full mx-auto border-t border-slate-200 pt-4 text-xs text-slate-500 flex items-center justify-between">
+      <footer className="max-w-6xl w-full mx-auto border-t border-slate-200 pt-4 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-center sm:text-left">
         <span>PontoRural & Empresarial</span>
         <span>Compatível com qualquer empresa ou propriedade rural</span>
       </footer>

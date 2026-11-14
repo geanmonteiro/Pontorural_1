@@ -102,7 +102,19 @@ export interface GeneratedDayRow {
   col7Text: string; // "13:00" or ""
 }
 
+import { PermissionKey } from '../constants/permissions';
+
 export type TeamUserRole = 'admin' | 'rh' | 'operador';
+
+export interface AccessProfile {
+  id: string;
+  ownerId: string;
+  name: string;
+  description: string;
+  permissions: PermissionKey[];
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
 
 export interface TeamUser {
   id: string;
@@ -110,7 +122,20 @@ export interface TeamUser {
   authUid: string;
   displayName: string;
   email: string;
-  role: TeamUserRole;
+  profileId: string;
+  allowedCompanyIds: string[];
+  role?: TeamUserRole;
+  active: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface UserAccessLink {
+  ownerId: string;
+  authUid: string;
+  teamUserId: string;
+  profileId: string;
+  allowedCompanyIds: string[];
   active: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -130,4 +155,6 @@ export const FIELD_LIMITS = {
   holidayNameMax: 100,
   teamUserNameMax: 120,
   teamUserEmailMax: 160,
+  profileNameMax: 80,
+  profileDescMax: 200,
 } as const;

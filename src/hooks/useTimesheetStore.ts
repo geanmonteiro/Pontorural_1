@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   User,
   browserLocalPersistence,
@@ -16,6 +16,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -32,6 +33,7 @@ import {
   testFirestoreConnection,
 } from '../lib/firebase';
 import {
+  AccessProfile,
   Company,
   CustomHoliday,
   DayOverrideEntry,
@@ -40,8 +42,9 @@ import {
   MonthOverride,
   Schedule,
   TeamUser,
-  TeamUserRole,
+  UserAccessLink,
 } from '../types/timesheet';
+import { ALL_PERMISSION_KEYS, PermissionKey } from '../constants/permissions';
 import { BillingCycle, PlanId } from '../constants/plans';
 import {
   importBackupBundlesToFirestore,
@@ -69,12 +72,19 @@ export function useTimesheetStore() {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [connectionWarning, setConnectionWarning] = useState(false);
 
+  const [workspaceOwnerId, setWorkspaceOwnerId] = useState<string>('');
+  const [isWorkspaceOwner, setIsWorkspaceOwner] = useState<boolean>(true);
+  const [accessLink, setAccessLink] = useState<UserAccessLink | null>(null);
+  const [assignedProfile, setAssignedProfile] = useState<AccessProfile | null>(null);
+  const [accessDeniedInactive, setAccessDeniedInactive] = useState(false);
+
   const [companies, setCompanies] = useState<Company[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customHolidays, setCustomHolidays] = useState<CustomHoliday[]>([]);
   const [monthOverrides, setMonthOverrides] = useState<MonthOverride[]>([]);
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
+  const [accessProfiles, setAccessProfiles] = useState<AccessProfile[]>([]);
   const [subscription, setSubscription] = useState<UserSubscriptionData | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
@@ -94,12 +104,18 @@ export function useTimesheetStore() {
 
   useEffect(() => {
     if (!authReady || !user || !emailVerified) {
+      setWorkspaceOwnerId('');
+      setIsWorkspaceOwner(true);
+      setAccessLink(null);
+      setAssignedProfile(null);
+      setAccessDeniedInactive(false);
       setCompanies([]);
       setSchedules([]);
       setEmployees([]);
       setCustomHolidays([]);
       setMonthOverrides([]);
       setTeamUsers([]);
+      setAccessProfiles([]);
       setSubscription(null);
       setDataLoading(false);
       return;
@@ -107,33 +123,16 @@ export function useTimesheetStore() {
 
     let cancelled = false;
     const unsubs: Array<() => void> = [];
-    setDataLoading(true);
-    const uid = user.uid;
-
-    const loadedFlags = {
-      companies: false,
-      schedules: false,
-      employees: false,
-      holidays: false,
-      overrides: false,
-      teamUsers: false,
-      subscription: false,
-    };
-
-    const checkDone = () => {
-      if (
-        !cancelled &&
-        loadedFlags.companies &&
-        loadedFlags.schedules &&
-        loadedFlags.employees &&
-        loadedFlags.holidays &&
-        loadedFlags.overrides &&
-        loadedFlags.teamUsers &&
-        loadedFlags.subscription
-      ) {
-        setDataLoading(false);
+    const dataUnsubs: Array<() => void> = [];
+    const clearDataUnsubs = () => {
+      while (dataUnsubs.length > 0) {
+        const fn = dataUnsubs.pop();
+        if (fn) fn();
       }
     };
+
+    setDataLoading(true);
+    const currentUid = user.uid;
 
     const startSync = async () => {
       try {
@@ -150,130 +149,412 @@ export function useTimesheetStore() {
         return;
       }
 
-      // Run idempotent versioned Firestore schema migrations before/with listeners
+      const linkPath = `userAccessLinks/${currentUid}`;
+      let initialLink: UserAccessLink | null = null;
       try {
-        await runUserMigrations(uid);
-      } catch (err) {
-        console.error('Migration runner error:', err);
+        const linkSnap = await getDoc(doc(db, linkPath));
+        if (linkSnap.exists()) {
+          initialLink = linkSnap.data() as UserAccessLink;
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, linkPath);
       }
       if (cancelled) return;
 
-      const companiesPath = `users/${uid}/companies`;
-      unsubs.push(
-        onSnapshot(
-          query(collection(db, companiesPath), where('ownerId', '==', uid)),
-          (snap) => {
-            const list = snap.docs
-              .map((d) => ({ id: d.id, ...(d.data() as Omit<Company, 'id'>) }))
-              .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-            setCompanies(list);
-            loadedFlags.companies = true;
-            checkDone();
-          },
-          (error) => handleFirestoreError(error, OperationType.GET, companiesPath)
-        )
-      );
+      // Case 1: Workspace Owner
+      if (!initialLink || initialLink.ownerId === currentUid) {
+        setWorkspaceOwnerId(currentUid);
+        setIsWorkspaceOwner(true);
+        setAccessLink(null);
+        setAssignedProfile(null);
+        setAccessDeniedInactive(false);
 
-      const schedulesPath = `users/${uid}/schedules`;
-      unsubs.push(
-        onSnapshot(
-          query(collection(db, schedulesPath), where('ownerId', '==', uid)),
-          (snap) => {
-            const list = snap.docs
-              .map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) }))
-              .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-            setSchedules(list);
-            loadedFlags.schedules = true;
-            checkDone();
-          },
-          (error) => handleFirestoreError(error, OperationType.GET, schedulesPath)
-        )
-      );
+        try {
+          await runUserMigrations(currentUid);
+        } catch (err) {
+          console.error('Migration runner error:', err);
+        }
+        if (cancelled) return;
 
-      const employeesPath = `users/${uid}/employees`;
-      unsubs.push(
-        onSnapshot(
-          query(collection(db, employeesPath), where('ownerId', '==', uid)),
-          (snap) => {
-            const list = snap.docs
-              .map((d) => ({ id: d.id, ...(d.data() as Omit<Employee, 'id'>) }))
-              .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-            setEmployees(list);
-            loadedFlags.employees = true;
-            checkDone();
-          },
-          (error) => handleFirestoreError(error, OperationType.GET, employeesPath)
-        )
-      );
+        const loadedFlags = {
+          companies: false,
+          schedules: false,
+          employees: false,
+          holidays: false,
+          overrides: false,
+          teamUsers: false,
+          accessProfiles: false,
+          subscription: false,
+        };
+        const checkDone = () => {
+          if (
+            !cancelled &&
+            loadedFlags.companies &&
+            loadedFlags.schedules &&
+            loadedFlags.employees &&
+            loadedFlags.holidays &&
+            loadedFlags.overrides &&
+            loadedFlags.teamUsers &&
+            loadedFlags.accessProfiles &&
+            loadedFlags.subscription
+          ) {
+            setDataLoading(false);
+          }
+        };
 
-      const holidaysPath = `users/${uid}/customHolidays`;
-      unsubs.push(
-        onSnapshot(
-          query(collection(db, holidaysPath), where('ownerId', '==', uid)),
-          (snap) => {
-            const list = snap.docs
-              .map((d) => ({
+        const companiesPath = `users/${currentUid}/companies`;
+        unsubs.push(
+          onSnapshot(
+            query(collection(db, companiesPath), where('ownerId', '==', currentUid)),
+            (snap) => {
+              const list = snap.docs
+                .map((d) => ({ id: d.id, ...(d.data() as Omit<Company, 'id'>) }))
+                .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+              setCompanies(list);
+              loadedFlags.companies = true;
+              checkDone();
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, companiesPath)
+          )
+        );
+
+        const schedulesPath = `users/${currentUid}/schedules`;
+        unsubs.push(
+          onSnapshot(
+            query(collection(db, schedulesPath), where('ownerId', '==', currentUid)),
+            (snap) => {
+              const list = snap.docs
+                .map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) }))
+                .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+              setSchedules(list);
+              loadedFlags.schedules = true;
+              checkDone();
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, schedulesPath)
+          )
+        );
+
+        const employeesPath = `users/${currentUid}/employees`;
+        unsubs.push(
+          onSnapshot(
+            query(collection(db, employeesPath), where('ownerId', '==', currentUid)),
+            (snap) => {
+              const list = snap.docs
+                .map((d) => ({ id: d.id, ...(d.data() as Omit<Employee, 'id'>) }))
+                .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+              setEmployees(list);
+              loadedFlags.employees = true;
+              checkDone();
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, employeesPath)
+          )
+        );
+
+        const holidaysPath = `users/${currentUid}/customHolidays`;
+        unsubs.push(
+          onSnapshot(
+            query(collection(db, holidaysPath), where('ownerId', '==', currentUid)),
+            (snap) => {
+              const list = snap.docs
+                .map((d) => ({ id: d.id, ...(d.data() as Omit<CustomHoliday, 'id'>) }))
+                .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+              setCustomHolidays(list);
+              loadedFlags.holidays = true;
+              checkDone();
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, holidaysPath)
+          )
+        );
+
+        const overridesPath = `users/${currentUid}/monthOverrides`;
+        unsubs.push(
+          onSnapshot(
+            query(collection(db, overridesPath), where('ownerId', '==', currentUid)),
+            (snap) => {
+              const list = snap.docs.map((d) => ({
                 id: d.id,
-                ...(d.data() as Omit<CustomHoliday, 'id'>),
-              }))
-              .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-            setCustomHolidays(list);
-            loadedFlags.holidays = true;
-            checkDone();
-          },
-          (error) => handleFirestoreError(error, OperationType.GET, holidaysPath)
-        )
-      );
+                ...(d.data() as Omit<MonthOverride, 'id'>),
+              }));
+              setMonthOverrides(list);
+              loadedFlags.overrides = true;
+              checkDone();
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, overridesPath)
+          )
+        );
 
-      const overridesPath = `users/${uid}/monthOverrides`;
-      unsubs.push(
-        onSnapshot(
-          query(collection(db, overridesPath), where('ownerId', '==', uid)),
-          (snap) => {
-            const list = snap.docs.map((d) => ({
-              id: d.id,
-              ...(d.data() as Omit<MonthOverride, 'id'>),
-            }));
-            setMonthOverrides(list);
-            loadedFlags.overrides = true;
-            checkDone();
-          },
-          (error) => handleFirestoreError(error, OperationType.GET, overridesPath)
-        )
-      );
+        const teamUsersPath = `users/${currentUid}/teamUsers`;
+        unsubs.push(
+          onSnapshot(
+            query(collection(db, teamUsersPath), where('ownerId', '==', currentUid)),
+            (snap) => {
+              const list = snap.docs
+                .map((d) => ({ id: d.id, ...(d.data() as Omit<TeamUser, 'id'>) }))
+                .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
+              setTeamUsers(list);
+              loadedFlags.teamUsers = true;
+              checkDone();
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, teamUsersPath)
+          )
+        );
 
-      const teamUsersPath = `users/${uid}/teamUsers`;
-      unsubs.push(
-        onSnapshot(
-          query(collection(db, teamUsersPath), where('ownerId', '==', uid)),
-          (snap) => {
-            const list = snap.docs
-              .map((d) => ({ id: d.id, ...(d.data() as Omit<TeamUser, 'id'>) }))
-              .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
-            setTeamUsers(list);
-            loadedFlags.teamUsers = true;
-            checkDone();
-          },
-          (error) => handleFirestoreError(error, OperationType.GET, teamUsersPath)
-        )
-      );
+        const profilesPath = `users/${currentUid}/accessProfiles`;
+        unsubs.push(
+          onSnapshot(
+            query(collection(db, profilesPath), where('ownerId', '==', currentUid)),
+            (snap) => {
+              const list = snap.docs
+                .map((d) => ({ id: d.id, ...(d.data() as Omit<AccessProfile, 'id'>) }))
+                .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+              setAccessProfiles(list);
+              loadedFlags.accessProfiles = true;
+              checkDone();
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, profilesPath)
+          )
+        );
 
-      const subDocPath = `users/${uid}/subscriptions/current`;
-      unsubs.push(
-        onSnapshot(
-          doc(db, subDocPath),
-          (snap) => {
-            if (snap.exists()) {
-              const data = snap.data() as { planId?: PlanId; billingCycle?: BillingCycle };
-              if (data.planId && data.billingCycle) {
-                setSubscription({ planId: data.planId, billingCycle: data.billingCycle });
-                localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+        const subDocPath = `users/${currentUid}/subscriptions/current`;
+        unsubs.push(
+          onSnapshot(
+            doc(db, subDocPath),
+            (snap) => {
+              if (snap.exists()) {
+                const data = snap.data() as { planId?: PlanId; billingCycle?: BillingCycle };
+                if (data.planId && data.billingCycle) {
+                  setSubscription({ planId: data.planId, billingCycle: data.billingCycle });
+                  localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+                }
               }
+              loadedFlags.subscription = true;
+              checkDone();
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, subDocPath)
+          )
+        );
+        return;
+      }
+
+      // Case 2: Linked Sub-User (Team User)
+      const ownerUid = initialLink.ownerId;
+      setWorkspaceOwnerId(ownerUid);
+      setIsWorkspaceOwner(false);
+
+      const subscribeScopedWorkspace = (link: UserAccessLink) => {
+        clearDataUnsubs();
+        if (!link.active) {
+          setAccessDeniedInactive(true);
+          setCompanies([]);
+          setSchedules([]);
+          setEmployees([]);
+          setCustomHolidays([]);
+          setMonthOverrides([]);
+          setDataLoading(false);
+          return;
+        }
+        setAccessDeniedInactive(false);
+
+        const profilePath = `users/${ownerUid}/accessProfiles/${link.profileId}`;
+        dataUnsubs.push(
+          onSnapshot(
+            doc(db, profilePath),
+            (snap) => {
+              if (snap.exists()) {
+                setAssignedProfile({
+                  id: snap.id,
+                  ...(snap.data() as Omit<AccessProfile, 'id'>),
+                });
+              } else {
+                setAssignedProfile(null);
+              }
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, profilePath)
+          )
+        );
+
+        const subDocPath = `users/${ownerUid}/subscriptions/current`;
+        dataUnsubs.push(
+          onSnapshot(
+            doc(db, subDocPath),
+            (snap) => {
+              if (snap.exists()) {
+                const data = snap.data() as { planId?: PlanId; billingCycle?: BillingCycle };
+                if (data.planId && data.billingCycle) {
+                  setSubscription({ planId: data.planId, billingCycle: data.billingCycle });
+                }
+              }
+            },
+            (error) => handleFirestoreError(error, OperationType.GET, subDocPath)
+          )
+        );
+
+        const allowedIds = Array.from(new Set(link.allowedCompanyIds)).filter(Boolean);
+        if (allowedIds.length === 0) {
+          setCompanies([]);
+          setSchedules([]);
+          setEmployees([]);
+          setCustomHolidays([]);
+          setMonthOverrides([]);
+          setDataLoading(false);
+          return;
+        }
+
+        const companyMap = new Map<string, Company>();
+        const schedulesByComp = new Map<string, Schedule[]>();
+        const employeesByComp = new Map<string, Employee[]>();
+        const holidaysByComp = new Map<string, CustomHoliday[]>();
+        const overridesByComp = new Map<string, MonthOverride[]>();
+
+        const doneComps = new Set<string>();
+        const doneSch = new Set<string>();
+        const doneEmp = new Set<string>();
+        const doneHol = new Set<string>();
+        const doneOv = new Set<string>();
+
+        const checkSubUserDone = () => {
+          if (
+            !cancelled &&
+            doneComps.size === allowedIds.length &&
+            doneSch.size === allowedIds.length &&
+            doneEmp.size === allowedIds.length &&
+            doneHol.size === allowedIds.length &&
+            doneOv.size === allowedIds.length
+          ) {
+            setDataLoading(false);
+          }
+        };
+
+        for (const cid of allowedIds) {
+          const compDocPath = `users/${ownerUid}/companies/${cid}`;
+          dataUnsubs.push(
+            onSnapshot(
+              doc(db, compDocPath),
+              (snap) => {
+                if (snap.exists()) {
+                  companyMap.set(cid, {
+                    id: snap.id,
+                    ...(snap.data() as Omit<Company, 'id'>),
+                  });
+                } else {
+                  companyMap.delete(cid);
+                }
+                setCompanies(
+                  Array.from(companyMap.values()).sort((a, b) =>
+                    a.name.localeCompare(b.name, 'pt-BR')
+                  )
+                );
+                doneComps.add(cid);
+                checkSubUserDone();
+              },
+              (error) => handleFirestoreError(error, OperationType.GET, compDocPath)
+            )
+          );
+
+          const schPath = `users/${ownerUid}/schedules`;
+          dataUnsubs.push(
+            onSnapshot(
+              query(collection(db, schPath), where('companyId', '==', cid)),
+              (snap) => {
+                schedulesByComp.set(
+                  cid,
+                  snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) }))
+                );
+                setSchedules(
+                  Array.from(schedulesByComp.values())
+                    .flat()
+                    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+                );
+                doneSch.add(cid);
+                checkSubUserDone();
+              },
+              (error) => handleFirestoreError(error, OperationType.GET, schPath)
+            )
+          );
+
+          const empPath = `users/${ownerUid}/employees`;
+          dataUnsubs.push(
+            onSnapshot(
+              query(collection(db, empPath), where('companyId', '==', cid)),
+              (snap) => {
+                employeesByComp.set(
+                  cid,
+                  snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Employee, 'id'>) }))
+                );
+                setEmployees(
+                  Array.from(employeesByComp.values())
+                    .flat()
+                    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+                );
+                doneEmp.add(cid);
+                checkSubUserDone();
+              },
+              (error) => handleFirestoreError(error, OperationType.GET, empPath)
+            )
+          );
+
+          const holPath = `users/${ownerUid}/customHolidays`;
+          dataUnsubs.push(
+            onSnapshot(
+              query(collection(db, holPath), where('companyId', '==', cid)),
+              (snap) => {
+                holidaysByComp.set(
+                  cid,
+                  snap.docs.map((d) => ({
+                    id: d.id,
+                    ...(d.data() as Omit<CustomHoliday, 'id'>),
+                  }))
+                );
+                setCustomHolidays(
+                  Array.from(holidaysByComp.values())
+                    .flat()
+                    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+                );
+                doneHol.add(cid);
+                checkSubUserDone();
+              },
+              (error) => handleFirestoreError(error, OperationType.GET, holPath)
+            )
+          );
+
+          const ovPath = `users/${ownerUid}/monthOverrides`;
+          dataUnsubs.push(
+            onSnapshot(
+              query(collection(db, ovPath), where('companyId', '==', cid)),
+              (snap) => {
+                overridesByComp.set(
+                  cid,
+                  snap.docs.map((d) => ({
+                    id: d.id,
+                    ...(d.data() as Omit<MonthOverride, 'id'>),
+                  }))
+                );
+                setMonthOverrides(Array.from(overridesByComp.values()).flat());
+                doneOv.add(cid);
+                checkSubUserDone();
+              },
+              (error) => handleFirestoreError(error, OperationType.GET, ovPath)
+            )
+          );
+        }
+      };
+
+      unsubs.push(
+        onSnapshot(
+          doc(db, linkPath),
+          (snap) => {
+            if (!snap.exists()) {
+              clearDataUnsubs();
+              setAccessLink(null);
+              setAccessDeniedInactive(true);
+              setDataLoading(false);
+              return;
             }
-            loadedFlags.subscription = true;
-            checkDone();
+            const nextLink = snap.data() as UserAccessLink;
+            setAccessLink(nextLink);
+            subscribeScopedWorkspace(nextLink);
           },
-          (error) => handleFirestoreError(error, OperationType.GET, subDocPath)
+          (error) => handleFirestoreError(error, OperationType.GET, linkPath)
         )
       );
     };
@@ -282,9 +563,81 @@ export function useTimesheetStore() {
 
     return () => {
       cancelled = true;
+      clearDataUnsubs();
       for (const unsub of unsubs) unsub();
     };
   }, [authReady, user, emailVerified]);
+
+  const activePermissions: PermissionKey[] = useMemo(() => {
+    if (isWorkspaceOwner) return ALL_PERMISSION_KEYS;
+    return assignedProfile?.permissions ?? [];
+  }, [isWorkspaceOwner, assignedProfile]);
+
+  const can = useCallback(
+    (perm: PermissionKey) => {
+      if (isWorkspaceOwner) return true;
+      return activePermissions.includes(perm);
+    },
+    [isWorkspaceOwner, activePermissions]
+  );
+
+  // Additional listeners when a sub-user is granted users.view or profiles.view
+  useEffect(() => {
+    if (!authReady || !user || !emailVerified || isWorkspaceOwner || !workspaceOwnerId || accessDeniedInactive) {
+      return;
+    }
+    const extraUnsubs: Array<() => void> = [];
+    if (can('profiles.view') || can('users.view')) {
+      const profilesPath = `users/${workspaceOwnerId}/accessProfiles`;
+      extraUnsubs.push(
+        onSnapshot(
+          query(collection(db, profilesPath), where('ownerId', '==', workspaceOwnerId)),
+          (snap) => {
+            setAccessProfiles(
+              snap.docs
+                .map((d) => ({ id: d.id, ...(d.data() as Omit<AccessProfile, 'id'>) }))
+                .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+            );
+          },
+          (error) => handleFirestoreError(error, OperationType.GET, profilesPath)
+        )
+      );
+    } else {
+      setAccessProfiles(assignedProfile ? [assignedProfile] : []);
+    }
+
+    if (can('users.view')) {
+      const teamUsersPath = `users/${workspaceOwnerId}/teamUsers`;
+      extraUnsubs.push(
+        onSnapshot(
+          query(collection(db, teamUsersPath), where('ownerId', '==', workspaceOwnerId)),
+          (snap) => {
+            setTeamUsers(
+              snap.docs
+                .map((d) => ({ id: d.id, ...(d.data() as Omit<TeamUser, 'id'>) }))
+                .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'))
+            );
+          },
+          (error) => handleFirestoreError(error, OperationType.GET, teamUsersPath)
+        )
+      );
+    } else {
+      setTeamUsers([]);
+    }
+
+    return () => {
+      for (const fn of extraUnsubs) fn();
+    };
+  }, [
+    authReady,
+    user,
+    emailVerified,
+    isWorkspaceOwner,
+    workspaceOwnerId,
+    accessDeniedInactive,
+    assignedProfile,
+    can,
+  ]);
 
   // Keep selectedCompanyId valid when companies change
   useEffect(() => {
@@ -318,7 +671,7 @@ export function useTimesheetStore() {
       case 'auth/invalid-email':
         return 'Informe um endereço de e-mail válido.';
       case 'auth/email-already-in-use':
-        return 'Este e-mail já está cadastrado. Faça login ou redefina a senha.';
+        return 'Este e-mail já está cadastrado. Use outro e-mail para o novo usuário.';
       case 'auth/weak-password':
         return 'A senha deve ter pelo menos 6 caracteres.';
       case 'auth/too-many-requests':
@@ -475,12 +828,13 @@ export function useTimesheetStore() {
     [customHolidays, activeCompany]
   );
 
+  const ownerUid = workspaceOwnerId || user?.uid || '';
+
   const saveCompany = useCallback(
     async (input: { id?: string; name: string; cnpj: string; address: string }) => {
-      if (!user) throw new Error('Usuário não autenticado.');
-      const uid = user.uid;
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
       const id = input.id || crypto.randomUUID();
-      const docPath = `users/${uid}/companies/${id}`;
+      const docPath = `users/${ownerUid}/companies/${id}`;
       const payload = {
         name: sanitizeString(input.name, FIELD_LIMITS.companyNameMax),
         cnpj: sanitizeString(input.cnpj, FIELD_LIMITS.cnpjMax),
@@ -495,7 +849,7 @@ export function useTimesheetStore() {
           });
         } else {
           await setDoc(doc(db, docPath), {
-            ownerId: uid,
+            ownerId: ownerUid,
             ...payload,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -507,21 +861,19 @@ export function useTimesheetStore() {
         handleFirestoreError(error, input.id ? OperationType.UPDATE : OperationType.CREATE, docPath);
       }
     },
-    [user, selectCompany]
+    [user, ownerUid, selectCompany]
   );
 
   const deleteCompany = useCallback(
     async (companyId: string) => {
-      if (!user) return;
-      const uid = user.uid;
-      // Delete dependent records cleanly first
+      if (!user || !ownerUid) return;
       const relatedSchedules = schedules.filter((s) => s.companyId === companyId);
       const relatedEmployees = employees.filter((e) => e.companyId === companyId);
       const relatedHolidays = customHolidays.filter((h) => h.companyId === companyId);
       const relatedOverrides = monthOverrides.filter((o) => o.companyId === companyId);
 
       for (const emp of relatedEmployees) {
-        const p = `users/${uid}/employees/${emp.id}`;
+        const p = `users/${ownerUid}/employees/${emp.id}`;
         try {
           await deleteDoc(doc(db, p));
         } catch (error) {
@@ -529,7 +881,7 @@ export function useTimesheetStore() {
         }
       }
       for (const sch of relatedSchedules) {
-        const p = `users/${uid}/schedules/${sch.id}`;
+        const p = `users/${ownerUid}/schedules/${sch.id}`;
         try {
           await deleteDoc(doc(db, p));
         } catch (error) {
@@ -537,7 +889,7 @@ export function useTimesheetStore() {
         }
       }
       for (const hol of relatedHolidays) {
-        const p = `users/${uid}/customHolidays/${hol.id}`;
+        const p = `users/${ownerUid}/customHolidays/${hol.id}`;
         try {
           await deleteDoc(doc(db, p));
         } catch (error) {
@@ -545,7 +897,7 @@ export function useTimesheetStore() {
         }
       }
       for (const ov of relatedOverrides) {
-        const p = `users/${uid}/monthOverrides/${ov.id}`;
+        const p = `users/${ownerUid}/monthOverrides/${ov.id}`;
         try {
           await deleteDoc(doc(db, p));
         } catch (error) {
@@ -553,14 +905,14 @@ export function useTimesheetStore() {
         }
       }
 
-      const compPath = `users/${uid}/companies/${companyId}`;
+      const compPath = `users/${ownerUid}/companies/${companyId}`;
       try {
         await deleteDoc(doc(db, compPath));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, compPath);
       }
     },
-    [user, schedules, employees, customHolidays, monthOverrides]
+    [user, ownerUid, schedules, employees, customHolidays, monthOverrides]
   );
 
   const saveSchedule = useCallback(
@@ -574,10 +926,9 @@ export function useTimesheetStore() {
       defaultAfternoonStart: string;
       showPreFilledInterval: boolean;
     }) => {
-      if (!user) throw new Error('Usuário não autenticado.');
-      const uid = user.uid;
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
       const id = input.id || crypto.randomUUID();
-      const docPath = `users/${uid}/schedules/${id}`;
+      const docPath = `users/${ownerUid}/schedules/${id}`;
       const cleanRestDays = Array.from(new Set(input.restDays))
         .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
         .sort((a, b) => a - b);
@@ -599,7 +950,7 @@ export function useTimesheetStore() {
           });
         } else {
           await setDoc(doc(db, docPath), {
-            ownerId: uid,
+            ownerId: ownerUid,
             companyId: input.companyId,
             ...baseFields,
             createdAt: serverTimestamp(),
@@ -611,20 +962,20 @@ export function useTimesheetStore() {
         handleFirestoreError(error, input.id ? OperationType.UPDATE : OperationType.CREATE, docPath);
       }
     },
-    [user]
+    [user, ownerUid]
   );
 
   const deleteSchedule = useCallback(
     async (scheduleId: string) => {
-      if (!user) return;
-      const docPath = `users/${user.uid}/schedules/${scheduleId}`;
+      if (!user || !ownerUid) return;
+      const docPath = `users/${ownerUid}/schedules/${scheduleId}`;
       try {
         await deleteDoc(doc(db, docPath));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, docPath);
       }
     },
-    [user]
+    [user, ownerUid]
   );
 
   const saveEmployee = useCallback(
@@ -639,10 +990,9 @@ export function useTimesheetStore() {
       admissionDate: string;
       active: boolean;
     }) => {
-      if (!user) throw new Error('Usuário não autenticado.');
-      const uid = user.uid;
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
       const id = input.id || crypto.randomUUID();
-      const docPath = `users/${uid}/employees/${id}`;
+      const docPath = `users/${ownerUid}/employees/${id}`;
       const baseFields = {
         scheduleId: input.scheduleId,
         name: sanitizeString(input.name.toUpperCase(), FIELD_LIMITS.employeeNameMax),
@@ -661,7 +1011,7 @@ export function useTimesheetStore() {
           });
         } else {
           await setDoc(doc(db, docPath), {
-            ownerId: uid,
+            ownerId: ownerUid,
             companyId: input.companyId,
             ...baseFields,
             createdAt: serverTimestamp(),
@@ -673,20 +1023,20 @@ export function useTimesheetStore() {
         handleFirestoreError(error, input.id ? OperationType.UPDATE : OperationType.CREATE, docPath);
       }
     },
-    [user]
+    [user, ownerUid]
   );
 
   const deleteEmployee = useCallback(
     async (employeeId: string) => {
-      if (!user) return;
-      const docPath = `users/${user.uid}/employees/${employeeId}`;
+      if (!user || !ownerUid) return;
+      const docPath = `users/${ownerUid}/employees/${employeeId}`;
       try {
         await deleteDoc(doc(db, docPath));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, docPath);
       }
     },
-    [user]
+    [user, ownerUid]
   );
 
   const saveCustomHoliday = useCallback(
@@ -697,10 +1047,9 @@ export function useTimesheetStore() {
       dateKey: string;
       recurringYearly: boolean;
     }) => {
-      if (!user) throw new Error('Usuário não autenticado.');
-      const uid = user.uid;
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
       const id = input.id || crypto.randomUUID();
-      const docPath = `users/${uid}/customHolidays/${id}`;
+      const docPath = `users/${ownerUid}/customHolidays/${id}`;
       const baseFields = {
         name: sanitizeString(input.name, FIELD_LIMITS.holidayNameMax),
         dateKey: input.dateKey,
@@ -715,7 +1064,7 @@ export function useTimesheetStore() {
           });
         } else {
           await setDoc(doc(db, docPath), {
-            ownerId: uid,
+            ownerId: ownerUid,
             companyId: input.companyId,
             ...baseFields,
             createdAt: serverTimestamp(),
@@ -727,34 +1076,33 @@ export function useTimesheetStore() {
         handleFirestoreError(error, input.id ? OperationType.UPDATE : OperationType.CREATE, docPath);
       }
     },
-    [user]
+    [user, ownerUid]
   );
 
   const deleteCustomHoliday = useCallback(
     async (holidayId: string) => {
-      if (!user) return;
-      const docPath = `users/${user.uid}/customHolidays/${holidayId}`;
+      if (!user || !ownerUid) return;
+      const docPath = `users/${ownerUid}/customHolidays/${holidayId}`;
       try {
         await deleteDoc(doc(db, docPath));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, docPath);
       }
     },
-    [user]
+    [user, ownerUid]
   );
 
   const saveDayOverride = useCallback(
     async (params: {
       companyId: string;
       yearMonth: string;
-      targetId: string; // 'ALL' or employeeId
+      targetId: string;
       dayKey: string;
-      entry: DayOverrideEntry | null; // null clears override
+      entry: DayOverrideEntry | null;
     }) => {
-      if (!user) throw new Error('Usuário não autenticado.');
-      const uid = user.uid;
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
       const overrideId = `${params.companyId}_${params.yearMonth}_${params.targetId}`;
-      const docPath = `users/${uid}/monthOverrides/${overrideId}`;
+      const docPath = `users/${ownerUid}/monthOverrides/${overrideId}`;
       const existingDoc = monthOverrides.find((m) => m.id === overrideId);
       const nextMap: Record<string, DayOverrideEntry> = {
         ...(existingDoc?.dayOverrides ?? {}),
@@ -774,7 +1122,7 @@ export function useTimesheetStore() {
           });
         } else {
           await setDoc(doc(db, docPath), {
-            ownerId: uid,
+            ownerId: ownerUid,
             companyId: params.companyId,
             yearMonth: params.yearMonth,
             targetId: params.targetId,
@@ -791,27 +1139,27 @@ export function useTimesheetStore() {
         );
       }
     },
-    [user, monthOverrides]
+    [user, ownerUid, monthOverrides]
   );
 
   const clearMonthOverrides = useCallback(
     async (companyId: string, yearMonth: string, targetId: string) => {
-      if (!user) return;
+      if (!user || !ownerUid) return;
       const overrideId = `${companyId}_${yearMonth}_${targetId}`;
       const existingDoc = monthOverrides.find((m) => m.id === overrideId);
       if (!existingDoc) return;
-      const docPath = `users/${user.uid}/monthOverrides/${overrideId}`;
+      const docPath = `users/${ownerUid}/monthOverrides/${overrideId}`;
       try {
         await deleteDoc(doc(db, docPath));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, docPath);
       }
     },
-    [user, monthOverrides]
+    [user, ownerUid, monthOverrides]
   );
 
   const seedExampleCompany = useCallback(async () => {
-    if (!user) return;
+    if (!user || !isWorkspaceOwner) return;
     const companyId = await saveCompany({
       name: 'FAZENDA MODELO AGROPECUÁRIA LTDA',
       cnpj: '00.000.000/0001-00',
@@ -841,11 +1189,11 @@ export function useTimesheetStore() {
       admissionDate: '2026-01-10',
       active: true,
     });
-  }, [user, saveCompany, saveSchedule, saveEmployee]);
+  }, [user, isWorkspaceOwner, saveCompany, saveSchedule, saveEmployee]);
 
   const saveSubscriptionPlan = useCallback(
     async (planId: PlanId, billingCycle: BillingCycle) => {
-      if (!user) throw new Error('Usuário não autenticado.');
+      if (!user || !isWorkspaceOwner) throw new Error('Apenas o titular da conta pode alterar o plano.');
       const subDocPath = `users/${user.uid}/subscriptions/current`;
       try {
         if (subscription) {
@@ -871,15 +1219,17 @@ export function useTimesheetStore() {
         );
       }
     },
-    [user, subscription]
+    [user, isWorkspaceOwner, subscription]
   );
 
   const importBackupJson = useCallback(
     async (rawJson: string) => {
-      if (!user) throw new Error('Usuário não autenticado.');
+      if (!user || !isWorkspaceOwner) {
+        throw new Error('Apenas o titular da conta pode restaurar backups JSON.');
+      }
       return importBackupBundlesToFirestore(user.uid, rawJson);
     },
-    [user]
+    [user, isWorkspaceOwner]
   );
 
   const importEmployeesBatch = useCallback(
@@ -889,8 +1239,7 @@ export function useTimesheetStore() {
       duplicateStrategy: 'update' | 'skip';
       onProgress?: (done: number, total: number) => void;
     }) => {
-      if (!user) throw new Error('Usuário não autenticado.');
-      const uid = user.uid;
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
       const total = params.rows.length;
       let created = 0;
       let updated = 0;
@@ -911,7 +1260,7 @@ export function useTimesheetStore() {
         }
 
         const empId = row.existingEmployeeId || crypto.randomUUID();
-        const docPath = `users/${uid}/employees/${empId}`;
+        const docPath = `users/${ownerUid}/employees/${empId}`;
         const baseFields = {
           scheduleId: row.scheduleId,
           name: sanitizeString(row.name.toUpperCase(), FIELD_LIMITS.employeeNameMax),
@@ -934,7 +1283,7 @@ export function useTimesheetStore() {
             updated++;
           } else {
             await setDoc(doc(db, docPath), {
-              ownerId: uid,
+              ownerId: ownerUid,
               companyId: params.companyId,
               ...baseFields,
               createdAt: serverTimestamp(),
@@ -955,21 +1304,76 @@ export function useTimesheetStore() {
 
       return { created, updated, skipped };
     },
-    [user]
+    [user, ownerUid]
   );
 
+  // Access Profiles CRUD
+  const saveAccessProfile = useCallback(
+    async (input: {
+      id?: string;
+      name: string;
+      description: string;
+      permissions: PermissionKey[];
+    }) => {
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
+      const id = input.id || crypto.randomUUID();
+      const docPath = `users/${ownerUid}/accessProfiles/${id}`;
+      const cleanPermissions = Array.from(new Set(input.permissions)).slice(0, 64);
+      const payload = {
+        name: sanitizeString(input.name, FIELD_LIMITS.profileNameMax),
+        description: sanitizeString(input.description, FIELD_LIMITS.profileDescMax),
+        permissions: cleanPermissions,
+      };
+
+      try {
+        if (input.id) {
+          await updateDoc(doc(db, docPath), {
+            ...payload,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await setDoc(doc(db, docPath), {
+            ownerId: ownerUid,
+            ...payload,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+        return id;
+      } catch (error) {
+        handleFirestoreError(error, input.id ? OperationType.UPDATE : OperationType.CREATE, docPath);
+      }
+    },
+    [user, ownerUid]
+  );
+
+  const deleteAccessProfile = useCallback(
+    async (profileId: string) => {
+      if (!user || !ownerUid) return;
+      const docPath = `users/${ownerUid}/accessProfiles/${profileId}`;
+      try {
+        await deleteDoc(doc(db, docPath));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, docPath);
+      }
+    },
+    [user, ownerUid]
+  );
+
+  // Team Users CRUD (synced with /userAccessLinks/{authUid})
   const createTeamUser = useCallback(
     async (input: {
       displayName: string;
       email: string;
       password: string;
-      role: TeamUserRole;
+      profileId: string;
+      allowedCompanyIds: string[];
       active: boolean;
     }) => {
-      if (!user) throw new Error('Usuário não autenticado.');
-      const uid = user.uid;
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
       const cleanName = sanitizeString(input.displayName, FIELD_LIMITS.teamUserNameMax);
       const cleanEmail = sanitizeString(input.email.toLowerCase(), FIELD_LIMITS.teamUserEmailMax);
+      const cleanCompanyIds = Array.from(new Set(input.allowedCompanyIds)).slice(0, 50);
 
       let createdAuthUid = '';
       try {
@@ -983,60 +1387,113 @@ export function useTimesheetStore() {
       }
 
       const teamUserId = crypto.randomUUID();
-      const docPath = `users/${uid}/teamUsers/${teamUserId}`;
+      const docPath = `users/${ownerUid}/teamUsers/${teamUserId}`;
+      const linkPath = `userAccessLinks/${createdAuthUid}`;
+
       try {
         await setDoc(doc(db, docPath), {
-          ownerId: uid,
+          ownerId: ownerUid,
           authUid: createdAuthUid,
           displayName: cleanName,
           email: cleanEmail,
-          role: input.role,
+          profileId: input.profileId,
+          allowedCompanyIds: cleanCompanyIds,
           active: Boolean(input.active),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+
+        await setDoc(doc(db, linkPath), {
+          ownerId: ownerUid,
+          authUid: createdAuthUid,
+          teamUserId,
+          profileId: input.profileId,
+          allowedCompanyIds: cleanCompanyIds,
+          active: Boolean(input.active),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
         return teamUserId;
       } catch (error) {
         handleFirestoreError(error, OperationType.CREATE, docPath);
       }
     },
-    [user]
+    [user, ownerUid]
   );
 
   const updateTeamUser = useCallback(
     async (input: {
       id: string;
+      authUid: string;
       displayName: string;
-      role: TeamUserRole;
+      profileId: string;
+      allowedCompanyIds: string[];
       active: boolean;
     }) => {
-      if (!user) throw new Error('Usuário não autenticado.');
-      const docPath = `users/${user.uid}/teamUsers/${input.id}`;
+      if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
+      const cleanCompanyIds = Array.from(new Set(input.allowedCompanyIds)).slice(0, 50);
+      const docPath = `users/${ownerUid}/teamUsers/${input.id}`;
+      const linkPath = `userAccessLinks/${input.authUid}`;
+
       try {
         await updateDoc(doc(db, docPath), {
           displayName: sanitizeString(input.displayName, FIELD_LIMITS.teamUserNameMax),
-          role: input.role,
+          profileId: input.profileId,
+          allowedCompanyIds: cleanCompanyIds,
           active: Boolean(input.active),
           updatedAt: serverTimestamp(),
         });
+
+        if (input.authUid) {
+          const linkRef = doc(db, linkPath);
+          const linkSnap = await getDoc(linkRef);
+          if (linkSnap.exists()) {
+            await updateDoc(linkRef, {
+              profileId: input.profileId,
+              allowedCompanyIds: cleanCompanyIds,
+              active: Boolean(input.active),
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            await setDoc(linkRef, {
+              ownerId: ownerUid,
+              authUid: input.authUid,
+              teamUserId: input.id,
+              profileId: input.profileId,
+              allowedCompanyIds: cleanCompanyIds,
+              active: Boolean(input.active),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+        }
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, docPath);
       }
     },
-    [user]
+    [user, ownerUid]
   );
 
   const deleteTeamUser = useCallback(
-    async (teamUserId: string) => {
-      if (!user) return;
-      const docPath = `users/${user.uid}/teamUsers/${teamUserId}`;
+    async (teamUser: TeamUser) => {
+      if (!user || !ownerUid) return;
+      const docPath = `users/${ownerUid}/teamUsers/${teamUser.id}`;
       try {
         await deleteDoc(doc(db, docPath));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, docPath);
       }
+      if (teamUser.authUid) {
+        const linkPath = `userAccessLinks/${teamUser.authUid}`;
+        try {
+          await deleteDoc(doc(db, linkPath));
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, linkPath);
+        }
+      }
     },
-    [user]
+    [user, ownerUid]
   );
 
   return {
@@ -1048,11 +1505,19 @@ export function useTimesheetStore() {
     authMessage,
     connectionWarning,
     dataLoading,
+    isWorkspaceOwner,
+    workspaceOwnerId,
+    accessLink,
+    assignedProfile,
+    accessDeniedInactive,
+    activePermissions,
+    can,
     companies,
     schedules,
     employees,
     customHolidays,
     teamUsers,
+    accessProfiles,
     subscription,
     activeCompany,
     selectedCompanyId,
@@ -1082,6 +1547,8 @@ export function useTimesheetStore() {
     saveSubscriptionPlan,
     importBackupJson,
     importEmployeesBatch,
+    saveAccessProfile,
+    deleteAccessProfile,
     createTeamUser,
     updateTeamUser,
     deleteTeamUser,

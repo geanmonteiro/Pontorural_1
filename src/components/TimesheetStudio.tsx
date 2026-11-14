@@ -61,6 +61,12 @@ interface TimesheetStudioProps {
   onGoToCompanies: () => void;
   onGoToEmployees: () => void;
   onSeedExample?: () => Promise<void>;
+  canEditDay?: boolean;
+  canCalibrate?: boolean;
+  canPrint?: boolean;
+  canExportPdf?: boolean;
+  canGoToCompanies?: boolean;
+  canGoToEmployees?: boolean;
 }
 
 export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
@@ -77,6 +83,12 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
   onGoToCompanies,
   onGoToEmployees,
   onSeedExample,
+  canEditDay = true,
+  canCalibrate = true,
+  canPrint = true,
+  canExportPdf = true,
+  canGoToCompanies = true,
+  canGoToEmployees = true,
 }) => {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -211,7 +223,7 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
   };
 
   const handleOpenDayEditor = (row: GeneratedDayRow) => {
-    if (!previewEmployee || !activeCompany) return;
+    if (!canEditDay || !previewEmployee || !activeCompany) return;
     setEditingDayRow(row);
     const empOverride = monthOverrides.find(
       (m) =>
@@ -335,30 +347,36 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
       <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-3">
         <Calendar className="w-8 h-8 text-slate-400 mx-auto" />
         <h3 className="font-display text-base font-semibold text-slate-900">
-          Cadastre ou selecione uma empresa para gerar folhas
+          {canGoToCompanies
+            ? 'Cadastre ou selecione uma empresa para gerar folhas'
+            : 'Nenhuma empresa habilitada para este usuário'}
         </h3>
         <p className="text-sm text-slate-600 max-w-md mx-auto">
-          Comece cadastrando a fazenda ou empresa empregadora e seus colaboradores.
+          {canGoToCompanies
+            ? 'Comece cadastrando a fazenda ou empresa empregadora e seus colaboradores.'
+            : 'Solicite ao administrador a liberação de ao menos uma empresa no seu acesso.'}
         </p>
-        <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={onGoToCompanies}
-            className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
-          >
-            Cadastrar Empresa
-          </button>
-          {onSeedExample && (
+        {canGoToCompanies && (
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              onClick={onSeedExample}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium cursor-pointer"
+              onClick={onGoToCompanies}
+              className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 text-emerald-700" />
-              Carregar Modelo Exemplo
+              Cadastrar Empresa
             </button>
-          )}
-        </div>
+            {onSeedExample && (
+              <button
+                type="button"
+                onClick={onSeedExample}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-700" />
+                Carregar Modelo Exemplo
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -371,15 +389,19 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
           Nenhum funcionário cadastrado em {activeCompany.name}
         </h3>
         <p className="text-sm text-slate-600 max-w-md mx-auto">
-          Adicione ao menos um funcionário para visualizar e imprimir a folha de ponto A4.
+          {canGoToEmployees
+            ? 'Adicione ao menos um funcionário para visualizar e imprimir a folha de ponto A4.'
+            : 'Não há colaboradores cadastrados para esta empresa até o momento.'}
         </p>
-        <button
-          type="button"
-          onClick={onGoToEmployees}
-          className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
-        >
-          Cadastrar Funcionário
-        </button>
+        {canGoToEmployees && (
+          <button
+            type="button"
+            onClick={onGoToEmployees}
+            className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
+          >
+            Cadastrar Funcionário
+          </button>
+        )}
       </div>
     );
   }
@@ -466,48 +488,54 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowCalibration((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                showCalibration
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              Margens e Fonte
-            </button>
+            {canCalibrate && (
+              <button
+                type="button"
+                onClick={() => setShowCalibration((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                  showCalibration
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Margens e Fonte
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              disabled={employeesToPrint.length === 0 || exportingPdf}
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors disabled:opacity-50 whitespace-nowrap cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimir
-            </button>
+            {canPrint && (
+              <button
+                type="button"
+                disabled={employeesToPrint.length === 0 || exportingPdf}
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors disabled:opacity-50 whitespace-nowrap cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                Imprimir
+              </button>
+            )}
 
-            <button
-              type="button"
-              disabled={employeesToPrint.length === 0 || exportingPdf}
-              onClick={handleExportPdf}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors disabled:opacity-60 whitespace-nowrap cursor-pointer"
-            >
-              {exportingPdf ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FileDown className="w-4 h-4" />
-              )}
-              {exportingPdf && exportProgress
-                ? `Gerando PDF (${exportProgress.completedIndexes.length}/${exportProgress.total})...`
-                : `Exportar PDF (${employeesToPrint.length} ${
-                    employeesToPrint.length === 1 ? 'folha' : 'folhas'
-                  })`}
-            </button>
+            {canExportPdf && (
+              <button
+                type="button"
+                disabled={employeesToPrint.length === 0 || exportingPdf}
+                onClick={handleExportPdf}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors disabled:opacity-60 whitespace-nowrap cursor-pointer"
+              >
+                {exportingPdf ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileDown className="w-4 h-4" />
+                )}
+                {exportingPdf && exportProgress
+                  ? `Gerando PDF (${exportProgress.completedIndexes.length}/${exportProgress.total})...`
+                  : `Exportar PDF (${employeesToPrint.length} ${
+                      employeesToPrint.length === 1 ? 'folha' : 'folhas'
+                    })`}
+              </button>
+            )}
           </div>
         </div>
 
@@ -525,7 +553,7 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
         )}
 
         {/* Painel de Calibração Fina (opcional) */}
-        {showCalibration && (
+        {canCalibrate && showCalibration && (
           <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-xs font-semibold text-slate-900">
@@ -708,7 +736,7 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
             </div>
 
             {/* Editor de Dia Selecionado na Folha */}
-            {editingDayRow && previewEmployee ? (
+            {canEditDay && editingDayRow && previewEmployee ? (
               <div className="bg-white border border-emerald-700/40 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <div className="text-sm font-semibold text-slate-900">
@@ -810,8 +838,9 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
               </div>
             ) : (
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600">
-                Clique em qualquer linha da folha ao lado para ajustar manualmente um dia
-                específico (ex.: transformar um dia útil em feriado/folga ou liberar hora extra).
+                {canEditDay
+                  ? 'Clique em qualquer linha da folha ao lado para ajustar manualmente um dia específico (ex.: transformar um dia útil em feriado/folga ou liberar hora extra).'
+                  : 'Modo somente visualização para a grade diária. Seu perfil não possui permissão para ajustar marcações manuais.'}
               </div>
             )}
 
@@ -821,7 +850,7 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
                 <span className="text-xs font-semibold text-slate-700">
                   Feriados em {formatMonthYearPt(year, month)}
                 </span>
-                {Object.keys(companyMonthOverrideMap).length > 0 && (
+                {canEditDay && Object.keys(companyMonthOverrideMap).length > 0 && (
                   <button
                     type="button"
                     onClick={() => onClearMonthOverrides(activeCompany.id, yearMonthKey, 'ALL')}
@@ -883,7 +912,7 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
                   month={month}
                   rows={previewRows}
                   calibration={calibration}
-                  interactive
+                  interactive={canEditDay}
                   selectedDayKey={editingDayRow?.dayKey ?? null}
                   onDayClick={handleOpenDayEditor}
                 />

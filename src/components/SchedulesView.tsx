@@ -18,6 +18,9 @@ interface SchedulesViewProps {
   }) => Promise<string | undefined>;
   onDeleteSchedule: (id: string) => Promise<void>;
   onGoToCompanies: () => void;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export const SchedulesView: React.FC<SchedulesViewProps> = ({
@@ -26,6 +29,9 @@ export const SchedulesView: React.FC<SchedulesViewProps> = ({
   onSaveSchedule,
   onDeleteSchedule,
   onGoToCompanies,
+  canCreate = true,
+  canEdit = true,
+  canDelete = true,
 }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -134,14 +140,16 @@ export const SchedulesView: React.FC<SchedulesViewProps> = ({
             para <span className="font-medium text-slate-900">{activeCompany.name}</span>.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openNew}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          Nova Jornada
-        </button>
+        {canCreate && (
+          <button
+            type="button"
+            onClick={openNew}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Nova Jornada
+          </button>
+        )}
       </div>
 
       {showForm && (
@@ -322,13 +330,15 @@ export const SchedulesView: React.FC<SchedulesViewProps> = ({
           <p className="text-sm text-slate-600 max-w-md mx-auto">
             Crie ao menos uma jornada de trabalho para vincular aos funcionários admitidos.
           </p>
-          <button
-            type="button"
-            onClick={openNew}
-            className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
-          >
-            Criar Primeira Jornada
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={openNew}
+              className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
+            >
+              Criar Primeira Jornada
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -364,45 +374,48 @@ export const SchedulesView: React.FC<SchedulesViewProps> = ({
                     </td>
                     <td className="py-3 px-4 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(sch)}
-                          title="Editar jornada"
-                          className="p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        {confirmDeleteId === sch.id ? (
-                          <div className="inline-flex items-center gap-1 bg-red-50 border border-red-200 rounded-md px-2 py-1">
-                            <span className="text-xs text-red-700">Excluir?</span>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await onDeleteSchedule(sch.id);
-                                setConfirmDeleteId(null);
-                              }}
-                              className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
-                            >
-                              Sim
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="text-xs text-slate-500 hover:underline cursor-pointer ml-1"
-                            >
-                              Não
-                            </button>
-                          </div>
-                        ) : (
+                        {canEdit && (
                           <button
                             type="button"
-                            onClick={() => setConfirmDeleteId(sch.id)}
-                            title="Excluir jornada"
-                            className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                            onClick={() => openEdit(sch)}
+                            title="Editar jornada"
+                            className="p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Pencil className="w-4 h-4" />
                           </button>
                         )}
+                        {canDelete &&
+                          (confirmDeleteId === sch.id ? (
+                            <div className="inline-flex items-center gap-1 bg-red-50 border border-red-200 rounded-md px-2 py-1">
+                              <span className="text-xs text-red-700">Excluir?</span>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await onDeleteSchedule(sch.id);
+                                  setConfirmDeleteId(null);
+                                }}
+                                className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                              >
+                                Sim
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="text-xs text-slate-500 hover:underline cursor-pointer ml-1"
+                              >
+                                Não
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(sch.id)}
+                              title="Excluir jornada"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ))}
                       </div>
                     </td>
                   </tr>

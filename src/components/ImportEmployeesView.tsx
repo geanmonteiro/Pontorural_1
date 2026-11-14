@@ -38,6 +38,7 @@ interface ImportEmployeesViewProps {
   onGoToCompanies: () => void;
   onGoToSchedules: () => void;
   onGoToEmployees: () => void;
+  canImport?: boolean;
 }
 
 const MAPPING_FIELDS: { key: EmployeeColumnKey; label: string; required?: boolean }[] = [
@@ -58,6 +59,7 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
   onGoToCompanies,
   onGoToSchedules,
   onGoToEmployees,
+  canImport = true,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
@@ -531,29 +533,35 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled={importing || rowsSelectedForImport.length === 0}
-                onClick={handleConfirmImport}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold disabled:opacity-60 whitespace-nowrap cursor-pointer"
-              >
-                {importing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>
-                      Importando ({importProgress?.done ?? 0}/{importProgress?.total ?? 0})...
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>
-                      Importar {rowsSelectedForImport.length}{' '}
-                      {rowsSelectedForImport.length === 1 ? 'Funcionário' : 'Funcionários'}
-                    </span>
-                  </>
-                )}
-              </button>
+              {canImport ? (
+                <button
+                  type="button"
+                  disabled={importing || rowsSelectedForImport.length === 0}
+                  onClick={handleConfirmImport}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold disabled:opacity-60 whitespace-nowrap cursor-pointer"
+                >
+                  {importing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>
+                        Importando ({importProgress?.done ?? 0}/{importProgress?.total ?? 0})...
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>
+                        Importar {rowsSelectedForImport.length}{' '}
+                        {rowsSelectedForImport.length === 1 ? 'Funcionário' : 'Funcionários'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Seu perfil permite apenas pré-visualizar planilhas (gravação desabilitada).
+                </div>
+              )}
             </div>
 
             {importing && importProgress && (

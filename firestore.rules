@@ -29,6 +29,33 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function accessLinkPath() {
+      return /databases/$(database)/documents/userAccessLinks/$(request.auth.uid);
+    }
+
+    function isActiveWorkspaceMember(userId) {
+      return isSignedIn()
+        && request.auth.uid != userId
+        && exists(accessLinkPath())
+        && get(accessLinkPath()).data.ownerId == userId
+        && get(accessLinkPath()).data.active == true;
+    }
+
+    function memberHasCompany(userId, companyId) {
+      return isActiveWorkspaceMember(userId)
+        && companyId in get(accessLinkPath()).data.allowedCompanyIds;
+    }
+
+    function memberProfilePath(userId) {
+      return /databases/$(database)/documents/users/$(userId)/accessProfiles/$(get(accessLinkPath()).data.profileId);
+    }
+
+    function memberHasPermission(userId, perm) {
+      return isActiveWorkspaceMember(userId)
+        && exists(memberProfilePath(userId))
+        && perm in get(memberProfilePath(userId)).data.permissions;
+    }
+
     // Entity validation helpers (matching firebase-blueprint.json limits)
     function isValidCompany(data, userId) {
       return data.keys().hasAll(['ownerId', 'name', 'cnpj', 'address', 'createdAt', 'updatedAt'])
@@ -131,17 +158,80 @@ service cloud.firestore {
         && data.appliedAt is timestamp;
     }
 
+    function isValidAccessProfile(data, userId) {
+      return data.keys().hasAll(['ownerId', 'name', 'description', 'permissions', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'name', 'description', 'permissions', 'createdAt', 'updatedAt'])
+        && data.ownerId is string && data.ownerId == userId && data.ownerId.size() <= 128
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 80
+        && data.description is string && data.description.size() <= 200
+        && data.permissions is list && data.permissions.size() <= 64
+        && (data.permissions.size() == 0 || (data.permissions[0] is string && data.permissions[0].size() <= 64))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     function isValidTeamUser(data, userId) {
-      return data.keys().hasAll(['ownerId', 'authUid', 'displayName', 'email', 'role', 'active', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['ownerId', 'authUid', 'displayName', 'email', 'role', 'active', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll([
+          'ownerId', 'authUid', 'displayName', 'email',
+          'profileId', 'allowedCompanyIds', 'active', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'authUid', 'displayName', 'email',
+          'profileId', 'allowedCompanyIds', 'active', 'createdAt', 'updatedAt'
+        ])
         && data.ownerId is string && data.ownerId == userId && data.ownerId.size() <= 128
         && isValidId(data.authUid)
         && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 120
         && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
-        && data.role in ['admin', 'rh', 'operador']
+        && isValidId(data.profileId)
+        && data.allowedCompanyIds is list && data.allowedCompanyIds.size() <= 50
+        && (data.allowedCompanyIds.size() == 0 || isValidId(data.allowedCompanyIds[0]))
         && data.active is bool
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isValidAccessLink(data) {
+      return data.keys().hasAll([
+          'ownerId', 'authUid', 'teamUserId', 'profileId',
+          'allowedCompanyIds', 'active', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'authUid', 'teamUserId', 'profileId',
+          'allowedCompanyIds', 'active', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isValidId(data.authUid)
+        && isValidId(data.teamUserId)
+        && isValidId(data.profileId)
+        && data.allowedCompanyIds is list && data.allowedCompanyIds.size() <= 50
+        && (data.allowedCompanyIds.size() == 0 || isValidId(data.allowedCompanyIds[0]))
+        && data.active is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /userAccessLinks/{targetAuthUid} {
+      allow get: if isSignedIn() && isValidId(targetAuthUid)
+        && (request.auth.uid == targetAuthUid || (resource != null && existing().ownerId == request.auth.uid));
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(targetAuthUid)
+        && isValidAccessLink(incoming())
+        && incoming().authUid == targetAuthUid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (incoming().ownerId == request.auth.uid || memberHasPermission(incoming().ownerId, 'users.create'));
+      allow update: if isSignedIn() && isValidId(targetAuthUid)
+        && isValidAccessLink(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().authUid == existing().authUid
+        && incoming().teamUserId == existing().teamUserId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['profileId', 'allowedCompanyIds', 'active', 'updatedAt'])
+        && (existing().ownerId == request.auth.uid || memberHasPermission(existing().ownerId, 'users.edit'));
+      allow delete: if isSignedIn() && isValidId(targetAuthUid)
+        && (existing().ownerId == request.auth.uid || memberHasPermission(existing().ownerId, 'users.delete'));
     }
 
     match /users/{userId} {
@@ -158,7 +248,9 @@ service cloud.firestore {
       }
 
       match /subscriptions/{subscriptionId} {
-        allow get: if isOwner(userId) && isValidId(subscriptionId) && (resource == null || existing().ownerId == request.auth.uid);
+        allow get: if (isOwner(userId) || isActiveWorkspaceMember(userId))
+          && isValidId(subscriptionId)
+          && (resource == null || existing().ownerId == userId);
         allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
         allow create: if isOwner(userId) && isValidId(subscriptionId)
           && isValidSubscription(incoming(), userId)
@@ -173,31 +265,65 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /accessProfiles/{profileId} {
+        allow get: if (isOwner(userId) || (isActiveWorkspaceMember(userId) && (get(accessLinkPath()).data.profileId == profileId || memberHasPermission(userId, 'profiles.view') || memberHasPermission(userId, 'users.view'))))
+          && isValidId(profileId)
+          && (resource == null || existing().ownerId == userId);
+        allow list: if (isOwner(userId) && resource.data.ownerId == request.auth.uid)
+          || ((memberHasPermission(userId, 'profiles.view') || memberHasPermission(userId, 'users.view')) && resource.data.ownerId == userId);
+        allow create: if (isOwner(userId) || memberHasPermission(userId, 'profiles.create'))
+          && isValidId(profileId)
+          && isValidAccessProfile(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if (isOwner(userId) || memberHasPermission(userId, 'profiles.edit'))
+          && isValidId(profileId)
+          && isValidAccessProfile(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'permissions', 'updatedAt']);
+        allow delete: if (isOwner(userId) || memberHasPermission(userId, 'profiles.delete'))
+          && isValidId(profileId)
+          && existing().ownerId == userId;
+      }
+
       match /companies/{companyId} {
-        allow get: if isOwner(userId) && isValidId(companyId) && (resource == null || existing().ownerId == request.auth.uid);
+        allow get: if (isOwner(userId) || memberHasCompany(userId, companyId))
+          && isValidId(companyId)
+          && (resource == null || existing().ownerId == userId);
         allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
-        allow create: if isOwner(userId) && isValidId(companyId)
+        allow create: if isOwner(userId)
+          && isValidId(companyId)
           && isValidCompany(incoming(), userId)
           && incoming().createdAt == request.time
           && incoming().updatedAt == request.time;
-        allow update: if isOwner(userId) && isValidId(companyId)
+        allow update: if (isOwner(userId) || (memberHasCompany(userId, companyId) && memberHasPermission(userId, 'companies.edit')))
+          && isValidId(companyId)
           && isValidCompany(incoming(), userId)
           && incoming().ownerId == existing().ownerId
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
           && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'cnpj', 'address', 'updatedAt']);
-        allow delete: if isOwner(userId) && isValidId(companyId) && existing().ownerId == request.auth.uid;
+        allow delete: if (isOwner(userId) || (memberHasCompany(userId, companyId) && memberHasPermission(userId, 'companies.delete')))
+          && isValidId(companyId)
+          && existing().ownerId == userId;
       }
 
       match /schedules/{scheduleId} {
-        allow get: if isOwner(userId) && isValidId(scheduleId) && (resource == null || existing().ownerId == request.auth.uid);
-        allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
-        allow create: if isOwner(userId) && isValidId(scheduleId)
+        allow get: if (isOwner(userId) || (resource != null && memberHasCompany(userId, existing().companyId)))
+          && isValidId(scheduleId)
+          && (resource == null || existing().ownerId == userId);
+        allow list: if (isOwner(userId) && resource.data.ownerId == request.auth.uid)
+          || (isActiveWorkspaceMember(userId) && resource.data.companyId in get(accessLinkPath()).data.allowedCompanyIds);
+        allow create: if (isOwner(userId) || (memberHasCompany(userId, incoming().companyId) && memberHasPermission(userId, 'schedules.create')))
+          && isValidId(scheduleId)
           && isValidSchedule(incoming(), userId)
           && incoming().createdAt == request.time
           && incoming().updatedAt == request.time
           && exists(/databases/$(database)/documents/users/$(userId)/companies/$(incoming().companyId));
-        allow update: if isOwner(userId) && isValidId(scheduleId)
+        allow update: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && memberHasPermission(userId, 'schedules.edit')))
+          && isValidId(scheduleId)
           && isValidSchedule(incoming(), userId)
           && incoming().ownerId == existing().ownerId
           && incoming().companyId == existing().companyId
@@ -207,19 +333,26 @@ service cloud.firestore {
             'name', 'descriptionText', 'restDays', 'defaultMorningEnd',
             'defaultAfternoonStart', 'showPreFilledInterval', 'updatedAt'
           ]);
-        allow delete: if isOwner(userId) && isValidId(scheduleId) && existing().ownerId == request.auth.uid;
+        allow delete: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && memberHasPermission(userId, 'schedules.delete')))
+          && isValidId(scheduleId)
+          && existing().ownerId == userId;
       }
 
       match /employees/{employeeId} {
-        allow get: if isOwner(userId) && isValidId(employeeId) && (resource == null || existing().ownerId == request.auth.uid);
-        allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
-        allow create: if isOwner(userId) && isValidId(employeeId)
+        allow get: if (isOwner(userId) || (resource != null && memberHasCompany(userId, existing().companyId)))
+          && isValidId(employeeId)
+          && (resource == null || existing().ownerId == userId);
+        allow list: if (isOwner(userId) && resource.data.ownerId == request.auth.uid)
+          || (isActiveWorkspaceMember(userId) && resource.data.companyId in get(accessLinkPath()).data.allowedCompanyIds);
+        allow create: if (isOwner(userId) || (memberHasCompany(userId, incoming().companyId) && (memberHasPermission(userId, 'employees.create') || memberHasPermission(userId, 'importEmployees.import'))))
+          && isValidId(employeeId)
           && isValidEmployee(incoming(), userId)
           && incoming().createdAt == request.time
           && incoming().updatedAt == request.time
           && exists(/databases/$(database)/documents/users/$(userId)/companies/$(incoming().companyId))
           && exists(/databases/$(database)/documents/users/$(userId)/schedules/$(incoming().scheduleId));
-        allow update: if isOwner(userId) && isValidId(employeeId)
+        allow update: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && (memberHasPermission(userId, 'employees.edit') || memberHasPermission(userId, 'importEmployees.import'))))
+          && isValidId(employeeId)
           && isValidEmployee(incoming(), userId)
           && incoming().ownerId == existing().ownerId
           && incoming().companyId == existing().companyId
@@ -230,36 +363,50 @@ service cloud.firestore {
             'scheduleId', 'name', 'role', 'cpf', 'registrationNumber',
             'admissionDate', 'active', 'updatedAt'
           ]);
-        allow delete: if isOwner(userId) && isValidId(employeeId) && existing().ownerId == request.auth.uid;
+        allow delete: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && memberHasPermission(userId, 'employees.delete')))
+          && isValidId(employeeId)
+          && existing().ownerId == userId;
       }
 
       match /customHolidays/{holidayId} {
-        allow get: if isOwner(userId) && isValidId(holidayId) && (resource == null || existing().ownerId == request.auth.uid);
-        allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
-        allow create: if isOwner(userId) && isValidId(holidayId)
+        allow get: if (isOwner(userId) || (resource != null && memberHasCompany(userId, existing().companyId)))
+          && isValidId(holidayId)
+          && (resource == null || existing().ownerId == userId);
+        allow list: if (isOwner(userId) && resource.data.ownerId == request.auth.uid)
+          || (isActiveWorkspaceMember(userId) && resource.data.companyId in get(accessLinkPath()).data.allowedCompanyIds);
+        allow create: if (isOwner(userId) || (memberHasCompany(userId, incoming().companyId) && memberHasPermission(userId, 'holidays.create')))
+          && isValidId(holidayId)
           && isValidCustomHoliday(incoming(), userId)
           && incoming().createdAt == request.time
           && incoming().updatedAt == request.time
           && exists(/databases/$(database)/documents/users/$(userId)/companies/$(incoming().companyId));
-        allow update: if isOwner(userId) && isValidId(holidayId)
+        allow update: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && memberHasPermission(userId, 'holidays.edit')))
+          && isValidId(holidayId)
           && isValidCustomHoliday(incoming(), userId)
           && incoming().ownerId == existing().ownerId
           && incoming().companyId == existing().companyId
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
           && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'dateKey', 'recurringYearly', 'updatedAt']);
-        allow delete: if isOwner(userId) && isValidId(holidayId) && existing().ownerId == request.auth.uid;
+        allow delete: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && memberHasPermission(userId, 'holidays.delete')))
+          && isValidId(holidayId)
+          && existing().ownerId == userId;
       }
 
       match /monthOverrides/{overrideId} {
-        allow get: if isOwner(userId) && isValidId(overrideId) && (resource == null || existing().ownerId == request.auth.uid);
-        allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
-        allow create: if isOwner(userId) && isValidId(overrideId)
+        allow get: if (isOwner(userId) || (resource != null && memberHasCompany(userId, existing().companyId)))
+          && isValidId(overrideId)
+          && (resource == null || existing().ownerId == userId);
+        allow list: if (isOwner(userId) && resource.data.ownerId == request.auth.uid)
+          || (isActiveWorkspaceMember(userId) && resource.data.companyId in get(accessLinkPath()).data.allowedCompanyIds);
+        allow create: if (isOwner(userId) || (memberHasCompany(userId, incoming().companyId) && memberHasPermission(userId, 'studio.edit_day')))
+          && isValidId(overrideId)
           && isValidMonthOverride(incoming(), userId)
           && incoming().createdAt == request.time
           && incoming().updatedAt == request.time
           && exists(/databases/$(database)/documents/users/$(userId)/companies/$(incoming().companyId));
-        allow update: if isOwner(userId) && isValidId(overrideId)
+        allow update: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && memberHasPermission(userId, 'studio.edit_day')))
+          && isValidId(overrideId)
           && isValidMonthOverride(incoming(), userId)
           && incoming().ownerId == existing().ownerId
           && incoming().companyId == existing().companyId
@@ -268,25 +415,36 @@ service cloud.firestore {
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
           && incoming().diff(existing()).affectedKeys().hasOnly(['dayOverrides', 'updatedAt']);
-        allow delete: if isOwner(userId) && isValidId(overrideId) && existing().ownerId == request.auth.uid;
+        allow delete: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && memberHasPermission(userId, 'studio.edit_day')))
+          && isValidId(overrideId)
+          && existing().ownerId == userId;
       }
 
       match /teamUsers/{teamUserId} {
-        allow get: if isOwner(userId) && isValidId(teamUserId) && (resource == null || existing().ownerId == request.auth.uid);
-        allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
-        allow create: if isOwner(userId) && isValidId(teamUserId)
+        allow get: if (isOwner(userId) || memberHasPermission(userId, 'users.view') || (resource != null && existing().authUid == request.auth.uid))
+          && isValidId(teamUserId)
+          && (resource == null || existing().ownerId == userId);
+        allow list: if (isOwner(userId) && resource.data.ownerId == request.auth.uid)
+          || (memberHasPermission(userId, 'users.view') && resource.data.ownerId == userId);
+        allow create: if (isOwner(userId) || memberHasPermission(userId, 'users.create'))
+          && isValidId(teamUserId)
           && isValidTeamUser(incoming(), userId)
           && incoming().createdAt == request.time
-          && incoming().updatedAt == request.time;
-        allow update: if isOwner(userId) && isValidId(teamUserId)
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId)/accessProfiles/$(incoming().profileId));
+        allow update: if (isOwner(userId) || memberHasPermission(userId, 'users.edit'))
+          && isValidId(teamUserId)
           && isValidTeamUser(incoming(), userId)
           && incoming().ownerId == existing().ownerId
           && incoming().authUid == existing().authUid
           && incoming().email == existing().email
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
-          && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'active', 'updatedAt']);
-        allow delete: if isOwner(userId) && isValidId(teamUserId) && existing().ownerId == request.auth.uid;
+          && exists(/databases/$(database)/documents/users/$(userId)/accessProfiles/$(incoming().profileId))
+          && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'profileId', 'allowedCompanyIds', 'active', 'role', 'updatedAt']);
+        allow delete: if (isOwner(userId) || memberHasPermission(userId, 'users.delete'))
+          && isValidId(teamUserId)
+          && existing().ownerId == userId;
       }
     }
   }

@@ -353,9 +353,14 @@
           "minLength": 5,
           "maxLength": 160
         },
-        "role": {
+        "profileId": {
           "type": "string",
-          "enum": ["admin", "rh", "operador"]
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "allowedCompanyIds": {
+          "type": "array",
+          "description": "IDs das empresas habilitadas para este usuário acessar."
         },
         "active": {
           "type": "boolean"
@@ -369,7 +374,103 @@
           "format": "date-time"
         }
       },
-      "required": ["ownerId", "authUid", "displayName", "email", "role", "active", "createdAt", "updatedAt"]
+      "required": [
+        "ownerId",
+        "authUid",
+        "displayName",
+        "email",
+        "profileId",
+        "allowedCompanyIds",
+        "active",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AccessProfile": {
+      "title": "AccessProfile",
+      "description": "Perfil de acesso com lista de ações habilitadas por tela.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "permissions": {
+          "type": "array",
+          "description": "Chaves das ações habilitadas nas telas."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "name", "description", "permissions", "createdAt", "updatedAt"]
+    },
+    "UserAccessLink": {
+      "title": "UserAccessLink",
+      "description": "Vínculo de acesso do usuário criado ao workspace do titular, perfil e empresas permitidas.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "authUid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "teamUserId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "allowedCompanyIds": {
+          "type": "array",
+          "description": "IDs das empresas habilitadas para este usuário."
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "authUid",
+        "teamUserId",
+        "profileId",
+        "allowedCompanyIds",
+        "active",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -404,6 +505,14 @@
     "/users/{userId}/teamUsers/{teamUserId}": {
       "schema": { "$ref": "#/entities/TeamUser" },
       "description": "Usuários adicionais criados dentro da conta."
+    },
+    "/users/{userId}/accessProfiles/{profileId}": {
+      "schema": { "$ref": "#/entities/AccessProfile" },
+      "description": "Perfis de acesso e matriz de ações por tela."
+    },
+    "/userAccessLinks/{authUid}": {
+      "schema": { "$ref": "#/entities/UserAccessLink" },
+      "description": "Mapeamento de autenticação de usuário adicional para workspace, perfil e empresas habilitadas."
     }
   }
 }

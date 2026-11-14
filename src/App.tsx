@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { AccessProfilesView } from './components/AccessProfilesView';
 import { AuthScreen } from './components/AuthScreen';
 import { CompaniesView } from './components/CompaniesView';
 import { EmployeesView } from './components/EmployeesView';
@@ -8,6 +9,7 @@ import { SchedulesView } from './components/SchedulesView';
 import { AppSection, Sidebar } from './components/Sidebar';
 import { TimesheetStudio } from './components/TimesheetStudio';
 import { UsersView } from './components/UsersView';
+import { getSectionViewKey } from './constants/permissions';
 import { useTimesheetStore } from './hooks/useTimesheetStore';
 import {
   downloadAllCompaniesBackupJson,
@@ -20,7 +22,18 @@ import {
   formatBrlPrice,
   getPlanById,
 } from './constants/plans';
-import { Check, LogOut, X } from 'lucide-react';
+import { Check, LogOut, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+
+const ALL_SECTIONS: AppSection[] = [
+  'studio',
+  'employees',
+  'importEmployees',
+  'schedules',
+  'holidays',
+  'companies',
+  'users',
+  'profiles',
+];
 
 const SECTION_TITLES: Record<AppSection, string> = {
   studio: 'Estúdio de Folhas A4',
@@ -30,6 +43,7 @@ const SECTION_TITLES: Record<AppSection, string> = {
   holidays: 'Feriados Nacionais e Locais',
   companies: 'Empresas e Fazendas',
   users: 'Criação de Usuários',
+  profiles: 'Perfis de Acesso',
 };
 
 export default function App() {
@@ -42,6 +56,15 @@ export default function App() {
     store.subscription?.billingCycle ?? 'monthly'
   );
   const [savingPlan, setSavingPlan] = useState(false);
+
+  const visibleSections = useMemo(
+    () => ALL_SECTIONS.filter((sec) => store.can(getSectionViewKey(sec))),
+    [store]
+  );
+
+  const effectiveSection: AppSection = visibleSections.includes(activeSection)
+    ? activeSection
+    : visibleSections[0] ?? 'studio';
 
   const currentPlan = getPlanById(store.subscription?.planId);
   const planLabel = store.subscription
@@ -76,11 +99,44 @@ export default function App() {
     );
   }
 
+  if (store.accessDeniedInactive) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-8 text-center space-y-4">
+          <div className="w-12 h-12 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-6 h-6 text-red-600" />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="font-display text-lg font-bold text-slate-900">
+              Acesso Desativado
+            </h1>
+            <p className="text-sm text-slate-600">
+              Seu usuário ({store.user.email}) está inativo ou teve o vínculo removido pelo
+              administrador da conta. Entre em contato com o responsável para reativar seu
+              acesso.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={store.logout}
+            className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-800 cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            Sair da conta
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const canCreateCompany = store.can('companies.create') && store.isWorkspaceOwner;
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row print:block print:bg-white print:min-h-0">
       <Sidebar
-        activeSection={activeSection}
+        activeSection={effectiveSection}
         onSelectSection={setActiveSection}
+        visibleSections={visibleSections}
         companies={store.companies}
         activeCompany={store.activeCompany}
         onSelectCompany={store.selectCompany}
@@ -96,6 +152,10 @@ export default function App() {
             monthOverrides: store.monthOverrides,
           })
         }
+        canExportBackup={store.can('companies.backup')}
+        canCreateCompany={canCreateCompany}
+        isWorkspaceOwner={store.isWorkspaceOwner}
+        profileLabel={store.assignedProfile?.name}
         planLabel={planLabel}
         onOpenPlanModal={() => {
           setModalCycle(store.subscription?.billingCycle ?? 'monthly');
@@ -114,7 +174,9 @@ export default function App() {
               /
             </span>
             <h1 className="font-display font-semibold text-slate-900 whitespace-nowrap truncate">
-              {SECTION_TITLES[activeSection]}
+              {visibleSections.length > 0
+                ? SECTION_TITLES[effectiveSection]
+                : 'Acesso Restrito'}
             </h1>
           </div>
 
@@ -143,9 +205,20 @@ export default function App() {
               <div className="h-10 w-full bg-slate-100 rounded animate-pulse" />
               <div className="h-10 w-3/4 bg-slate-100 rounded animate-pulse" />
             </div>
+          ) : visibleSections.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-3">
+              <ShieldCheck className="w-8 h-8 text-slate-400 mx-auto" />
+              <h2 className="font-display text-base font-semibold text-slate-900">
+                Nenhuma tela habilitada para o seu perfil
+              </h2>
+              <p className="text-sm text-slate-600 max-w-md mx-auto">
+                O perfil de acesso vinculado ao seu usuário não possui telas habilitadas no
+                momento. Solicite ao administrador que ative as permissões desejadas.
+              </p>
+            </div>
           ) : (
             <>
-              {activeSection === 'studio' && (
+              {effectiveSection === 'studio' && (
                 <TimesheetStudio
                   activeCompany={store.activeCompany}
                   schedules={store.companySchedules}
@@ -159,11 +232,17 @@ export default function App() {
                   onClearMonthOverrides={store.clearMonthOverrides}
                   onGoToCompanies={() => setActiveSection('companies')}
                   onGoToEmployees={() => setActiveSection('employees')}
-                  onSeedExample={store.seedExampleCompany}
+                  onSeedExample={canCreateCompany ? store.seedExampleCompany : undefined}
+                  canEditDay={store.can('studio.edit_day')}
+                  canCalibrate={store.can('studio.calibrate')}
+                  canPrint={store.can('studio.print')}
+                  canExportPdf={store.can('studio.export_pdf')}
+                  canGoToCompanies={canCreateCompany && store.can('companies.view')}
+                  canGoToEmployees={store.can('employees.view') && store.can('employees.create')}
                 />
               )}
 
-              {activeSection === 'employees' && (
+              {effectiveSection === 'employees' && (
                 <EmployeesView
                   activeCompany={store.activeCompany}
                   schedules={store.companySchedules}
@@ -177,10 +256,15 @@ export default function App() {
                   onGoToCompanies={() => setActiveSection('companies')}
                   onGoToSchedules={() => setActiveSection('schedules')}
                   onOpenImport={() => setActiveSection('importEmployees')}
+                  canCreate={store.can('employees.create')}
+                  canEdit={store.can('employees.edit')}
+                  canDelete={store.can('employees.delete')}
+                  canGenerateSheet={store.can('studio.view')}
+                  canImport={store.can('importEmployees.view') && store.can('importEmployees.import')}
                 />
               )}
 
-              {activeSection === 'importEmployees' && (
+              {effectiveSection === 'importEmployees' && (
                 <ImportEmployeesView
                   activeCompany={store.activeCompany}
                   schedules={store.companySchedules}
@@ -189,20 +273,24 @@ export default function App() {
                   onGoToCompanies={() => setActiveSection('companies')}
                   onGoToSchedules={() => setActiveSection('schedules')}
                   onGoToEmployees={() => setActiveSection('employees')}
+                  canImport={store.can('importEmployees.import')}
                 />
               )}
 
-              {activeSection === 'schedules' && (
+              {effectiveSection === 'schedules' && (
                 <SchedulesView
                   activeCompany={store.activeCompany}
                   schedules={store.companySchedules}
                   onSaveSchedule={store.saveSchedule}
                   onDeleteSchedule={store.deleteSchedule}
                   onGoToCompanies={() => setActiveSection('companies')}
+                  canCreate={store.can('schedules.create')}
+                  canEdit={store.can('schedules.edit')}
+                  canDelete={store.can('schedules.delete')}
                 />
               )}
 
-              {activeSection === 'holidays' && (
+              {effectiveSection === 'holidays' && (
                 <HolidaysView
                   activeCompany={store.activeCompany}
                   customHolidays={store.companyHolidays}
@@ -211,10 +299,13 @@ export default function App() {
                   onSaveCustomHoliday={store.saveCustomHoliday}
                   onDeleteCustomHoliday={store.deleteCustomHoliday}
                   onGoToCompanies={() => setActiveSection('companies')}
+                  canCreate={store.can('holidays.create')}
+                  canEdit={store.can('holidays.edit')}
+                  canDelete={store.can('holidays.delete')}
                 />
               )}
 
-              {activeSection === 'companies' && (
+              {effectiveSection === 'companies' && (
                 <CompaniesView
                   companies={store.companies}
                   activeCompanyId={store.activeCompany?.id ?? ''}
@@ -241,17 +332,41 @@ export default function App() {
                     })
                   }
                   onImportBackupJson={store.importBackupJson}
+                  canCreate={store.can('companies.create')}
+                  canEdit={store.can('companies.edit')}
+                  canDelete={store.can('companies.delete')}
+                  canBackup={store.can('companies.backup')}
+                  isWorkspaceOwner={store.isWorkspaceOwner}
                 />
               )}
 
-              {activeSection === 'users' && (
+              {effectiveSection === 'users' && (
                 <UsersView
                   currentUserEmail={store.user.email ?? ''}
                   currentUserName={store.user.displayName ?? ''}
                   teamUsers={store.teamUsers}
+                  accessProfiles={store.accessProfiles}
+                  companies={store.companies}
+                  canCreate={store.can('users.create')}
+                  canEdit={store.can('users.edit')}
+                  canDelete={store.can('users.delete')}
+                  canViewProfiles={store.can('profiles.view')}
+                  onOpenProfiles={() => setActiveSection('profiles')}
                   onCreateUser={store.createTeamUser}
                   onUpdateUser={store.updateTeamUser}
                   onDeleteUser={store.deleteTeamUser}
+                />
+              )}
+
+              {effectiveSection === 'profiles' && (
+                <AccessProfilesView
+                  profiles={store.accessProfiles}
+                  teamUsers={store.teamUsers}
+                  canCreate={store.can('profiles.create')}
+                  canEdit={store.can('profiles.edit')}
+                  canDelete={store.can('profiles.delete')}
+                  onSaveProfile={store.saveAccessProfile}
+                  onDeleteProfile={store.deleteAccessProfile}
                 />
               )}
             </>

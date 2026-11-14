@@ -17,6 +17,9 @@ interface HolidaysViewProps {
   }) => Promise<string | undefined>;
   onDeleteCustomHoliday: (id: string) => Promise<void>;
   onGoToCompanies: () => void;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export const HolidaysView: React.FC<HolidaysViewProps> = ({
@@ -27,6 +30,9 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
   onSaveCustomHoliday,
   onDeleteCustomHoliday,
   onGoToCompanies,
+  canCreate = true,
+  canEdit = true,
+  canDelete = true,
 }) => {
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -35,6 +41,8 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
   const [recurringYearly, setRecurringYearly] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const canShowForm = editingId ? canEdit : canCreate;
 
   const nationalHolidays = useMemo(
     () => getNationalHolidaysForYear(selectedYear, true),
@@ -63,6 +71,7 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
   }
 
   const startEdit = (ch: CustomHoliday) => {
+    if (!canEdit) return;
     setEditingId(ch.id);
     setName(ch.name);
     setRecurringYearly(ch.recurringYearly);
@@ -84,6 +93,7 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
 
   const handleSaveHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canShowForm) return;
     setErrorMsg(null);
     if (name.trim().length < 2) {
       setErrorMsg('Informe o nome do feriado.');
@@ -148,81 +158,83 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Feriados Personalizados da Empresa */}
         <div className="lg:col-span-6 space-y-4">
-          <form
-            onSubmit={handleSaveHoliday}
-            className="bg-white border border-slate-200 rounded-xl p-5 space-y-4"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-base font-semibold text-slate-900">
-                {editingId ? 'Editar Feriado Local / Estadual' : 'Adicionar Feriado Local / Estadual'}
-              </h3>
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  className="text-xs text-slate-500 hover:text-slate-900 cursor-pointer"
-                >
-                  Cancelar edição
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Nome do Feriado *
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={FIELD_LIMITS.holidayNameMax}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex.: São João / Aniversário da Cidade"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Data *</label>
-                <input
-                  type="date"
-                  required
-                  value={dateValue}
-                  onChange={(e) => setDateValue(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono-tabular text-slate-900"
-                />
-              </div>
-              <div className="flex items-end pb-2">
-                <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={recurringYearly}
-                    onChange={(e) => setRecurringYearly(e.target.checked)}
-                    className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-700"
-                  />
-                  Repetir todo ano nesta data
-                </label>
-              </div>
-            </div>
-
-            {errorMsg && (
-              <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {errorMsg}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold disabled:opacity-60 cursor-pointer"
+          {canShowForm && (
+            <form
+              onSubmit={handleSaveHoliday}
+              className="bg-white border border-slate-200 rounded-xl p-5 space-y-4"
             >
-              <Plus className="w-4 h-4" />
-              {saving
-                ? 'Salvando...'
-                : editingId
-                ? 'Salvar Alterações'
-                : 'Adicionar Feriado'}
-            </button>
-          </form>
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-base font-semibold text-slate-900">
+                  {editingId ? 'Editar Feriado Local / Estadual' : 'Adicionar Feriado Local / Estadual'}
+                </h3>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="text-xs text-slate-500 hover:text-slate-900 cursor-pointer"
+                  >
+                    Cancelar edição
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Nome do Feriado *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={FIELD_LIMITS.holidayNameMax}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex.: São João / Aniversário da Cidade"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Data *</label>
+                  <input
+                    type="date"
+                    required
+                    value={dateValue}
+                    onChange={(e) => setDateValue(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono-tabular text-slate-900"
+                  />
+                </div>
+                <div className="flex items-end pb-2">
+                  <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={recurringYearly}
+                      onChange={(e) => setRecurringYearly(e.target.checked)}
+                      className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-700"
+                    />
+                    Repetir todo ano nesta data
+                  </label>
+                </div>
+              </div>
+
+              {errorMsg && (
+                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {errorMsg}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold disabled:opacity-60 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                {saving
+                  ? 'Salvando...'
+                  : editingId
+                  ? 'Salvar Alterações'
+                  : 'Adicionar Feriado'}
+              </button>
+            </form>
+          )}
 
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
@@ -249,24 +261,30 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
                           {displayDate}
                         </div>
                       </div>
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(ch)}
-                          title="Editar feriado"
-                          className="p-1.5 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteCustomHoliday(ch.id)}
-                          title="Remover feriado"
-                          className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {(canEdit || canDelete) && (
+                        <div className="inline-flex items-center gap-1">
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => startEdit(ch)}
+                              title="Editar feriado"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteCustomHoliday(ch.id)}
+                              title="Remover feriado"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -281,10 +299,15 @@ export const HolidaysView: React.FC<HolidaysViewProps> = ({
             <span className="text-xs font-semibold text-slate-600">
               Feriados Nacionais — {selectedYear}
             </span>
-            <label className="inline-flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+            <label
+              className={`inline-flex items-center gap-2 text-xs text-slate-700 ${
+                canCreate || canEdit ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={includeFacultativos}
+                disabled={!canCreate && !canEdit}
                 onChange={(e) => onToggleFacultativos(e.target.checked)}
                 className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-700"
               />

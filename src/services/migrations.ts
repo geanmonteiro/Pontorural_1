@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -10,6 +11,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { OperationType, db, handleFirestoreError } from '../lib/firebase';
+import { PRESET_PROFILES } from '../constants/permissions';
 import { DayOverrideEntry, FIELD_LIMITS } from '../types/timesheet';
 import { CompanyBackupBundle } from '../utils/backupExport';
 
@@ -104,6 +106,79 @@ const MIGRATIONS: MigrationDefinition[] = [
             active: true,
             updatedAt: serverTimestamp(),
           });
+        }
+      }
+    },
+  },
+  {
+    id: '003_default_access_profiles',
+    version: 3,
+    name: 'Perfis de acesso padrão e vínculo de empresas em usuários',
+    run: async (uid: string) => {
+      const profilesPath = `users/${uid}/accessProfiles`;
+      for (const preset of PRESET_PROFILES) {
+        const pRef = doc(db, `${profilesPath}/${preset.id}`);
+        const pSnap = await getDoc(pRef);
+        if (!pSnap.exists()) {
+          await setDoc(pRef, {
+            ownerId: uid,
+            name: preset.name,
+            description: preset.description,
+            permissions: preset.permissions,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
+      const companiesSnap = await getDocs(
+        query(collection(db, `users/${uid}/companies`), where('ownerId', '==', uid))
+      );
+      const allCompanyIds = companiesSnap.docs.map((d) => d.id).slice(0, 50);
+
+      const teamUsersPath = `users/${uid}/teamUsers`;
+      const teamUsersSnap = await getDocs(
+        query(collection(db, teamUsersPath), where('ownerId', '==', uid))
+      );
+      for (const uDoc of teamUsersSnap.docs) {
+        const data = uDoc.data();
+        const role = String(data.role || 'rh');
+        const profileId =
+          typeof data.profileId === 'string' && data.profileId
+            ? data.profileId
+            : role === 'admin'
+            ? 'preset_admin'
+            : role === 'operador'
+            ? 'preset_operador'
+            : 'preset_rh';
+        const allowedCompanyIds = Array.isArray(data.allowedCompanyIds)
+          ? (data.allowedCompanyIds as string[]).slice(0, 50)
+          : allCompanyIds;
+
+        if (!data.profileId || !Array.isArray(data.allowedCompanyIds) || 'role' in data) {
+          await updateDoc(doc(db, `${teamUsersPath}/${uDoc.id}`), {
+            profileId,
+            allowedCompanyIds,
+            role: deleteField(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        if (typeof data.authUid === 'string' && data.authUid) {
+          const linkRef = doc(db, `userAccessLinks/${data.authUid}`);
+          const linkSnap = await getDoc(linkRef);
+          if (!linkSnap.exists()) {
+            await setDoc(linkRef, {
+              ownerId: uid,
+              authUid: data.authUid,
+              teamUserId: uDoc.id,
+              profileId,
+              allowedCompanyIds,
+              active: Boolean(data.active ?? true),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
         }
       }
     },

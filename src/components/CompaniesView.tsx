@@ -20,6 +20,11 @@ interface CompaniesViewProps {
   onImportBackupJson: (
     rawJson: string
   ) => Promise<{ companies: number; schedules: number; employees: number; holidays: number }>;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  canBackup?: boolean;
+  isWorkspaceOwner?: boolean;
 }
 
 export const CompaniesView: React.FC<CompaniesViewProps> = ({
@@ -32,6 +37,11 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
   onExportCompanyBackup,
   onExportAllBackup,
   onImportBackupJson,
+  canCreate = true,
+  canEdit = true,
+  canDelete = true,
+  canBackup = true,
+  isWorkspaceOwner = true,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
@@ -130,51 +140,61 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {companies.length === 0 ? (
-            <button
-              type="button"
-              onClick={onSeedExample}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 text-emerald-700" />
-              Carregar Modelo Exemplo
-            </button>
+            canCreate && isWorkspaceOwner && (
+              <button
+                type="button"
+                onClick={onSeedExample}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-700" />
+                Carregar Modelo Exemplo
+              </button>
+            )
           ) : (
+            canBackup && (
+              <button
+                type="button"
+                onClick={() => {
+                  const filename = onExportAllBackup();
+                  setBackupNotice(`Backup completo salvo em ${filename}`);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-slate-600" />
+                Backup Completo (JSON)
+              </button>
+            )
+          )}
+          {canBackup && isWorkspaceOwner && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleImportFile}
+                className="hidden"
+              />
+              <button
+                type="button"
+                disabled={importing}
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors whitespace-nowrap disabled:opacity-60 cursor-pointer"
+              >
+                <Upload className="w-4 h-4 text-slate-600" />
+                {importing ? 'Importando...' : 'Restaurar JSON'}
+              </button>
+            </>
+          )}
+          {canCreate && isWorkspaceOwner && (
             <button
               type="button"
-              onClick={() => {
-                const filename = onExportAllBackup();
-                setBackupNotice(`Backup completo salvo em ${filename}`);
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+              onClick={openNew}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer"
             >
-              <Download className="w-4 h-4 text-slate-600" />
-              Backup Completo (JSON)
+              <Plus className="w-4 h-4" />
+              Nova Empresa
             </button>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            onChange={handleImportFile}
-            className="hidden"
-          />
-          <button
-            type="button"
-            disabled={importing}
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors whitespace-nowrap disabled:opacity-60 cursor-pointer"
-          >
-            <Upload className="w-4 h-4 text-slate-600" />
-            {importing ? 'Importando...' : 'Restaurar JSON'}
-          </button>
-          <button
-            type="button"
-            onClick={openNew}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Nova Empresa
-          </button>
         </div>
       </div>
 
@@ -298,28 +318,33 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
         <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-3">
           <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
           <h3 className="font-display text-base font-semibold text-slate-900">
-            Nenhuma empresa cadastrada
+            {canCreate && isWorkspaceOwner
+              ? 'Nenhuma empresa cadastrada'
+              : 'Nenhuma empresa habilitada para este usuário'}
           </h3>
           <p className="text-sm text-slate-600 max-w-md mx-auto">
-            Cadastre a fazenda ou empresa empregadora para começar a vincular jornadas e gerar
-            folhas de ponto automaticamente.
+            {canCreate && isWorkspaceOwner
+              ? 'Cadastre a fazenda ou empresa empregadora para começar a vincular jornadas e gerar folhas de ponto automaticamente.'
+              : 'Solicite ao administrador da conta a liberação de ao menos uma empresa no seu usuário.'}
           </p>
-          <div className="pt-2 flex items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={openNew}
-              className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
-            >
-              Cadastrar Empresa
-            </button>
-            <button
-              type="button"
-              onClick={onSeedExample}
-              className="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium cursor-pointer"
-            >
-              Carregar Modelo Exemplo
-            </button>
-          </div>
+          {canCreate && isWorkspaceOwner && (
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={openNew}
+                className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
+              >
+                Cadastrar Empresa
+              </button>
+              <button
+                type="button"
+                onClick={onSeedExample}
+                className="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium cursor-pointer"
+              >
+                Carregar Modelo Exemplo
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -364,57 +389,62 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
                               Ativar
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const filename = onExportCompanyBackup(company);
-                              setBackupNotice(`Backup da empresa salvo em ${filename}`);
-                            }}
-                            title="Exportar backup JSON desta empresa"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            Backup JSON
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openEdit(company)}
-                            title="Editar empresa"
-                            className="p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          {confirmDeleteId === company.id ? (
-                            <div className="inline-flex items-center gap-1 bg-red-50 border border-red-200 rounded-md px-2 py-1">
-                              <span className="text-xs text-red-700">Excluir tudo?</span>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await onDeleteCompany(company.id);
-                                  setConfirmDeleteId(null);
-                                }}
-                                className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
-                              >
-                                Sim
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="text-xs text-slate-500 hover:underline cursor-pointer ml-1"
-                              >
-                                Não
-                              </button>
-                            </div>
-                          ) : (
+                          {canBackup && (
                             <button
                               type="button"
-                              onClick={() => setConfirmDeleteId(company.id)}
-                              title="Excluir empresa"
-                              className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                              onClick={() => {
+                                const filename = onExportCompanyBackup(company);
+                                setBackupNotice(`Backup da empresa salvo em ${filename}`);
+                              }}
+                              title="Exportar backup JSON desta empresa"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Download className="w-3.5 h-3.5" />
+                              Backup JSON
                             </button>
                           )}
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(company)}
+                              title="Editar empresa"
+                              className="p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {canDelete &&
+                            (confirmDeleteId === company.id ? (
+                              <div className="inline-flex items-center gap-1 bg-red-50 border border-red-200 rounded-md px-2 py-1">
+                                <span className="text-xs text-red-700">Excluir tudo?</span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await onDeleteCompany(company.id);
+                                    setConfirmDeleteId(null);
+                                  }}
+                                  className="text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                                >
+                                  Sim
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  className="text-xs text-slate-500 hover:underline cursor-pointer ml-1"
+                                >
+                                  Não
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(company.id)}
+                                title="Excluir empresa"
+                                className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            ))}
                         </div>
                       </td>
                     </tr>

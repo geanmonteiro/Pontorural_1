@@ -988,11 +988,16 @@ export function useTimesheetStore() {
       cpf: string;
       registrationNumber: string;
       admissionDate: string;
+      birthDate?: string;
       active: boolean;
     }) => {
       if (!user || !ownerUid) throw new Error('Usuário não autenticado.');
       const id = input.id || crypto.randomUUID();
       const docPath = `users/${ownerUid}/employees/${id}`;
+      const cleanBirthDate =
+        typeof input.birthDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.birthDate.trim())
+          ? input.birthDate.trim()
+          : '';
       const baseFields = {
         scheduleId: input.scheduleId,
         name: sanitizeString(input.name.toUpperCase(), FIELD_LIMITS.employeeNameMax),
@@ -1000,6 +1005,7 @@ export function useTimesheetStore() {
         cpf: sanitizeString(input.cpf, FIELD_LIMITS.cpfMax),
         registrationNumber: sanitizeString(input.registrationNumber, FIELD_LIMITS.registrationMax),
         admissionDate: input.admissionDate,
+        birthDate: cleanBirthDate,
         active: Boolean(input.active),
       };
 
@@ -1271,6 +1277,10 @@ export function useTimesheetStore() {
             FIELD_LIMITS.registrationMax
           ),
           admissionDate: row.admissionDate,
+          birthDate:
+            typeof row.birthDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.birthDate)
+              ? row.birthDate
+              : '',
           active: Boolean(row.active),
         };
 

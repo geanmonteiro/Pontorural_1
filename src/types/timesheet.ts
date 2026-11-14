@@ -32,6 +32,7 @@ export interface Employee {
   cpf: string;
   registrationNumber: string;
   admissionDate: string; // YYYY-MM-DD
+  birthDate?: string; // YYYY-MM-DD
   active: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;

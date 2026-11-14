@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AccessProfilesView } from './components/AccessProfilesView';
 import { AuthScreen } from './components/AuthScreen';
+import { BirthdaysView } from './components/BirthdaysView';
 import { CompaniesView } from './components/CompaniesView';
 import { EmployeesView } from './components/EmployeesView';
 import { HolidaysView } from './components/HolidaysView';
@@ -28,6 +29,7 @@ const ALL_SECTIONS: AppSection[] = [
   'studio',
   'employees',
   'importEmployees',
+  'birthdays',
   'schedules',
   'holidays',
   'companies',
@@ -39,6 +41,7 @@ const SECTION_TITLES: Record<AppSection, string> = {
   studio: 'Estúdio de Folhas A4',
   employees: 'Cadastro de Funcionários',
   importEmployees: 'Importar Planilha de Funcionários',
+  birthdays: 'Aniversariantes do Mês',
   schedules: 'Jornadas de Trabalho',
   holidays: 'Feriados Nacionais e Locais',
   companies: 'Empresas e Fazendas',
@@ -274,6 +277,20 @@ export default function App() {
                   onGoToSchedules={() => setActiveSection('schedules')}
                   onGoToEmployees={() => setActiveSection('employees')}
                   canImport={store.can('importEmployees.import')}
+                />
+              )}
+
+              {effectiveSection === 'birthdays' && (
+                <BirthdaysView
+                  activeCompany={store.activeCompany}
+                  companies={store.companies}
+                  employees={store.employees}
+                  canGoToEmployees={store.can('employees.view')}
+                  canGoToImport={store.can('importEmployees.view')}
+                  canGoToCompanies={canCreateCompany && store.can('companies.view')}
+                  onGoToEmployees={() => setActiveSection('employees')}
+                  onGoToImport={() => setActiveSection('importEmployees')}
+                  onGoToCompanies={() => setActiveSection('companies')}
                 />
               )}
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { User } from 'firebase/auth';
 import {
   Building2,
+  Cake,
   CalendarDays,
   Clock,
   Download,
@@ -18,6 +19,7 @@ export type AppSection =
   | 'studio'
   | 'employees'
   | 'importEmployees'
+  | 'birthdays'
   | 'schedules'
   | 'holidays'
   | 'companies'
@@ -47,6 +49,7 @@ const NAV_ITEMS: { id: AppSection; label: string; icon: React.ComponentType<{ cl
   { id: 'studio', label: 'Gerar Folhas', icon: FileSpreadsheet },
   { id: 'employees', label: 'Funcionários', icon: Users },
   { id: 'importEmployees', label: 'Importar Planilha', icon: Upload },
+  { id: 'birthdays', label: 'Aniversariantes', icon: Cake },
   { id: 'schedules', label: 'Jornadas', icon: Clock },
   { id: 'holidays', label: 'Feriados', icon: CalendarDays },
   { id: 'companies', label: 'Empresas', icon: Building2 },

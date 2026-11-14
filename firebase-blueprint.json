@@ -147,6 +147,12 @@
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
           "maxLength": 10
         },
+        "birthDate": {
+          "type": "string",
+          "description": "Data de nascimento no formato YYYY-MM-DD (opcional).",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+          "maxLength": 10
+        },
         "active": {
           "type": "boolean"
         },

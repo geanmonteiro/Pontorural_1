@@ -99,7 +99,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'ownerId', 'companyId', 'scheduleId', 'name', 'role', 'cpf',
-          'registrationNumber', 'admissionDate', 'active', 'createdAt', 'updatedAt'
+          'registrationNumber', 'admissionDate', 'birthDate', 'active', 'createdAt', 'updatedAt'
         ])
         && data.ownerId is string && data.ownerId == userId && data.ownerId.size() <= 128
         && isValidId(data.companyId)
@@ -109,6 +109,7 @@ service cloud.firestore {
         && data.cpf is string && data.cpf.size() >= 11 && data.cpf.size() <= 20
         && data.registrationNumber is string && data.registrationNumber.size() >= 1 && data.registrationNumber.size() <= 32
         && data.admissionDate is string && data.admissionDate.size() == 10 && data.admissionDate.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && (!('birthDate' in data) || (data.birthDate is string && (data.birthDate == '' || (data.birthDate.size() == 10 && data.birthDate.matches('^\\d{4}-\\d{2}-\\d{2}$')))))
         && data.active is bool
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -361,7 +362,7 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/users/$(userId)/schedules/$(incoming().scheduleId))
           && incoming().diff(existing()).affectedKeys().hasOnly([
             'scheduleId', 'name', 'role', 'cpf', 'registrationNumber',
-            'admissionDate', 'active', 'updatedAt'
+            'admissionDate', 'birthDate', 'active', 'updatedAt'
           ]);
         allow delete: if (isOwner(userId) || (memberHasCompany(userId, existing().companyId) && memberHasPermission(userId, 'employees.delete')))
           && isValidId(employeeId)

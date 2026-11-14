@@ -183,6 +183,28 @@ const MIGRATIONS: MigrationDefinition[] = [
       }
     },
   },
+  {
+    id: '004_birthdays_permission',
+    version: 4,
+    name: 'Habilitação do módulo de aniversariantes nos perfis padrão',
+    run: async (uid: string) => {
+      const profilesPath = `users/${uid}/accessProfiles`;
+      for (const preset of PRESET_PROFILES) {
+        const pRef = doc(db, `${profilesPath}/${preset.id}`);
+        const pSnap = await getDoc(pRef);
+        if (pSnap.exists()) {
+          const data = pSnap.data();
+          const current = Array.isArray(data.permissions) ? (data.permissions as string[]) : [];
+          if (!current.includes('birthdays.view')) {
+            await updateDoc(pRef, {
+              permissions: [...current, 'birthdays.view'].slice(0, 64),
+              updatedAt: serverTimestamp(),
+            });
+          }
+        }
+      }
+    },
+  },
 ];
 
 /**
@@ -413,6 +435,10 @@ export async function importBackupBundlesToFirestore(
         admissionDate: /^\d{4}-\d{2}-\d{2}$/.test(emp.admissionDate)
           ? emp.admissionDate
           : new Date().toISOString().slice(0, 10),
+        birthDate:
+          typeof emp.birthDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(emp.birthDate)
+            ? emp.birthDate
+            : '',
         active: Boolean(emp.active ?? true),
       };
 

@@ -46,6 +46,7 @@ const MAPPING_FIELDS: { key: EmployeeColumnKey; label: string; required?: boolea
   { key: 'cpf', label: 'CPF', required: true },
   { key: 'role', label: 'Cargo / Função' },
   { key: 'registrationNumber', label: 'Nº de Registro' },
+  { key: 'birthDate', label: 'Data de Nascimento' },
   { key: 'admissionDate', label: 'Data de Admissão' },
   { key: 'scheduleName', label: 'Jornada (opcional)' },
   { key: 'active', label: 'Situação (opcional)' },
@@ -70,6 +71,7 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
     role: '',
     registrationNumber: '',
     admissionDate: '',
+    birthDate: '',
     scheduleName: '',
     active: '',
   });
@@ -388,7 +390,8 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               Aceita arquivos <strong>.xlsx</strong>, <strong>.xls</strong> e <strong>.csv</strong>{' '}
-              com colunas como Registro, Nome, CPF, Cargo, Data de Admissão e Jornada.
+              com colunas como Registro, Nome, CPF, Cargo, Data de Nascimento, Data de Admissão e
+              Jornada.
             </p>
           </div>
           <div className="pt-1 flex flex-wrap items-center justify-center gap-3">
@@ -624,6 +627,7 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
                     <th className="py-2.5 px-3">Nome do Empregado</th>
                     <th className="py-2.5 px-3">CPF</th>
                     <th className="py-2.5 px-3">Cargo</th>
+                    <th className="py-2.5 px-3">Nascimento</th>
                     <th className="py-2.5 px-3">Admissão</th>
                     <th className="py-2.5 px-3">Jornada</th>
                     <th className="py-2.5 px-3">Validação</th>
@@ -666,6 +670,9 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
                           {row.role}
                         </td>
                         <td className="py-2.5 px-3 font-mono-tabular text-slate-700 whitespace-nowrap">
+                          {row.birthDate ? formatDateBr(row.birthDate) : '—'}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono-tabular text-slate-700 whitespace-nowrap">
                           {formatDateBr(row.admissionDate)}
                         </td>
                         <td className="py-2.5 px-3 text-slate-600 max-w-[180px] truncate">
@@ -689,7 +696,7 @@ export const ImportEmployeesView: React.FC<ImportEmployeesViewProps> = ({
                   })}
                   {filteredPreviewRows.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-sm text-slate-500">
+                      <td colSpan={10} className="py-8 text-center text-sm text-slate-500">
                         Nenhuma linha encontrada para este filtro.
                       </td>
                     </tr>

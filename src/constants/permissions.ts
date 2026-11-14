@@ -10,6 +10,7 @@ export type PermissionKey =
   | 'employees.delete'
   | 'importEmployees.view'
   | 'importEmployees.import'
+  | 'birthdays.view'
   | 'schedules.view'
   | 'schedules.create'
   | 'schedules.edit'
@@ -36,6 +37,7 @@ export type PermissionSectionId =
   | 'studio'
   | 'employees'
   | 'importEmployees'
+  | 'birthdays'
   | 'schedules'
   | 'holidays'
   | 'companies'
@@ -90,6 +92,15 @@ export const PERMISSION_GROUPS: ScreenPermissionGroup[] = [
     actions: [
       { key: 'importEmployees.view', label: 'Acessar importador', description: 'Abrir a tela e baixar modelos de planilha.' },
       { key: 'importEmployees.import', label: 'Executar importação', description: 'Gravar e atualizar colaboradores no banco.' },
+    ],
+  },
+  {
+    sectionId: 'birthdays',
+    title: 'Aniversariantes do Mês',
+    subtitle: 'Painel de lembretes de aniversário dos colaboradores.',
+    viewKey: 'birthdays.view',
+    actions: [
+      { key: 'birthdays.view', label: 'Visualizar aniversariantes', description: 'Consultar lembretes e aniversariantes do mês por empresa.' },
     ],
   },
   {
@@ -188,6 +199,7 @@ export const PRESET_PROFILES: PresetProfileTemplate[] = [
       'employees.edit',
       'importEmployees.view',
       'importEmployees.import',
+      'birthdays.view',
       'schedules.view',
       'schedules.create',
       'schedules.edit',
@@ -206,6 +218,7 @@ export const PRESET_PROFILES: PresetProfileTemplate[] = [
       'studio.print',
       'studio.export_pdf',
       'employees.view',
+      'birthdays.view',
       'schedules.view',
       'holidays.view',
       'companies.view',

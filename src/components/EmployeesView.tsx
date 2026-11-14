@@ -16,6 +16,7 @@ interface EmployeesViewProps {
     cpf: string;
     registrationNumber: string;
     admissionDate: string;
+    birthDate?: string;
     active: boolean;
   }) => Promise<string | undefined>;
   onDeleteEmployee: (id: string) => Promise<void>;
@@ -56,6 +57,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
   const [cpf, setCpf] = useState('');
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [admissionDate, setAdmissionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [birthDate, setBirthDate] = useState('');
   const [scheduleId, setScheduleId] = useState('');
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -133,6 +135,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
     setCpf('');
     setRegistrationNumber('');
     setAdmissionDate(new Date().toISOString().slice(0, 10));
+    setBirthDate('');
     setScheduleId(schedules[0]?.id ?? '');
     setActive(true);
     setErrorMsg(null);
@@ -146,6 +149,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
     setCpf(emp.cpf);
     setRegistrationNumber(emp.registrationNumber);
     setAdmissionDate(emp.admissionDate);
+    setBirthDate(emp.birthDate ?? '');
     setScheduleId(emp.scheduleId);
     setActive(emp.active);
     setErrorMsg(null);
@@ -172,6 +176,10 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
       setErrorMsg('Informe o número de registro.');
       return;
     }
+    if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+      setErrorMsg('Informe uma data de nascimento válida.');
+      return;
+    }
     if (!scheduleId) {
       setErrorMsg('Selecione uma jornada de trabalho.');
       return;
@@ -188,6 +196,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
         cpf: cpf.trim(),
         registrationNumber: registrationNumber.trim(),
         admissionDate,
+        birthDate,
         active,
       });
       setShowForm(false);
@@ -280,7 +289,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
               />
             </div>
 
-            <div className="md:col-span-3">
+            <div className="md:col-span-2">
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 Cargo (Código e Descrição) *
               </label>
@@ -306,6 +315,19 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                 value={registrationNumber}
                 onChange={(e) => setRegistrationNumber(e.target.value)}
                 placeholder="2183"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono-tabular text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+              />
+            </div>
+
+            <div className="md:col-span-1">
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                Data de Nascimento
+              </label>
+              <input
+                type="date"
+                max={new Date().toISOString().slice(0, 10)}
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono-tabular text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
               />
             </div>
@@ -457,6 +479,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                   <th className="py-2.5 px-4">Nome do Empregado</th>
                   <th className="py-2.5 px-4">Cargo</th>
                   <th className="py-2.5 px-4">CPF</th>
+                  <th className="py-2.5 px-4">Nascimento</th>
                   <th className="py-2.5 px-4">Admissão</th>
                   <th className="py-2.5 px-4">Situação</th>
                   <th className="py-2.5 px-4 text-right">Ações</th>
@@ -479,6 +502,9 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                       <td className="py-2.5 px-4 text-slate-700 whitespace-nowrap">{emp.role}</td>
                       <td className="py-2.5 px-4 font-mono-tabular text-slate-700 whitespace-nowrap">
                         {emp.cpf}
+                      </td>
+                      <td className="py-2.5 px-4 font-mono-tabular text-slate-700 whitespace-nowrap">
+                        {emp.birthDate ? formatDateBr(emp.birthDate) : '—'}
                       </td>
                       <td className="py-2.5 px-4 font-mono-tabular text-slate-700 whitespace-nowrap">
                         {formatDateBr(emp.admissionDate)}
@@ -553,7 +579,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                 })}
                 {filteredEmployees.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="py-8 text-center text-sm text-slate-500">
                       Nenhum funcionário encontrado para o filtro aplicado.
                     </td>
                   </tr>

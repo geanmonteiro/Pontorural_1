@@ -8,6 +8,7 @@ export type EmployeeColumnKey =
   | 'role'
   | 'registrationNumber'
   | 'admissionDate'
+  | 'birthDate'
   | 'scheduleName'
   | 'active';
 
@@ -29,6 +30,7 @@ export interface NormalizedEmployeeRow {
   role: string;
   registrationNumber: string;
   admissionDate: string; // YYYY-MM-DD
+  birthDate: string; // YYYY-MM-DD or ''
   scheduleId: string;
   scheduleLabel: string;
   active: boolean;
@@ -51,6 +53,7 @@ const COLUMN_ALIASES: Record<EmployeeColumnKey, string[]> = {
   role: ['cargo', 'funcao', 'ocupacao', 'cbo', 'cargo funcao'],
   registrationNumber: ['registro', 'n registro', 'numero de registro', 'matricula', 'codigo', 're'],
   admissionDate: ['admissao', 'data de admissao', 'data admissao', 'dt admissao', 'inicio'],
+  birthDate: ['nascimento', 'data de nascimento', 'data nascimento', 'dt nascimento', 'dt nasc', 'aniversario'],
   scheduleName: ['jornada', 'escala', 'horario', 'turno', 'jornada de trabalho'],
   active: ['situacao', 'status', 'ativo', 'estado'],
 };
@@ -62,6 +65,7 @@ export function autoDetectColumnMapping(headers: string[]): ColumnMapping {
     role: '',
     registrationNumber: '',
     admissionDate: '',
+    birthDate: '',
     scheduleName: '',
     active: '',
   };
@@ -158,7 +162,7 @@ export function extractSheetData(
   };
 }
 
-function parseAdmissionDateValue(raw: unknown): string | null {
+function parseSpreadsheetDateValue(raw: unknown, isBirthDate = false): string | null {
   if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
     const y = raw.getFullYear();
     const m = String(raw.getMonth() + 1).padStart(2, '0');
@@ -166,7 +170,7 @@ function parseAdmissionDateValue(raw: unknown): string | null {
     return `${y}-${m}-${d}`;
   }
 
-  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 1000 && raw < 100000) {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 100 && raw < 100000) {
     const parsed = XLSX.SSF.parse_date_code(raw);
     if (parsed && parsed.y && parsed.m && parsed.d) {
       return `${String(parsed.y).padStart(4, '0')}-${String(parsed.m).padStart(2, '0')}-${String(
@@ -182,14 +186,23 @@ function parseAdmissionDateValue(raw: unknown): string | null {
   const isoMatch = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (isoMatch) {
     const [, y, m, d] = isoMatch;
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    const monthNum = Number(m);
+    const dayNum = Number(d);
+    if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
   }
 
   // DD/MM/YYYY or DD-MM-YYYY
   const brMatch = text.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
   if (brMatch) {
     const [, d, m, yRaw] = brMatch;
-    const y = yRaw.length === 2 ? `20${yRaw}` : yRaw;
+    let y = yRaw;
+    if (yRaw.length === 2) {
+      const yy = Number(yRaw);
+      const currentTwoDigitYear = new Date().getFullYear() % 100;
+      y = isBirthDate && yy > currentTwoDigitYear ? `19${yRaw}` : `20${yRaw}`;
+    }
     const monthNum = Number(m);
     const dayNum = Number(d);
     if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
@@ -266,10 +279,17 @@ export function normalizeEmployeeRows(params: {
     if (registrationNumber.length < 1) errors.push('Registro obrigatório');
 
     const rawAdmission = mapping.admissionDate ? row[mapping.admissionDate] : '';
-    const parsedDate = parseAdmissionDateValue(rawAdmission);
+    const parsedDate = parseSpreadsheetDateValue(rawAdmission, false);
     const admissionDate = parsedDate ?? new Date().toISOString().slice(0, 10);
     if (mapping.admissionDate && String(rawAdmission ?? '').trim() !== '' && !parsedDate) {
       errors.push('Data de admissão inválida');
+    }
+
+    const rawBirth = mapping.birthDate ? row[mapping.birthDate] : '';
+    const parsedBirthDate = parseSpreadsheetDateValue(rawBirth, true);
+    const birthDate = parsedBirthDate ?? '';
+    if (mapping.birthDate && String(rawBirth ?? '').trim() !== '' && !parsedBirthDate) {
+      errors.push('Data de nascimento inválida');
     }
 
     const rawSchedule = mapping.scheduleName
@@ -297,6 +317,7 @@ export function normalizeEmployeeRows(params: {
       role,
       registrationNumber,
       admissionDate,
+      birthDate,
       scheduleId: matchedSchedule?.id ?? '',
       scheduleLabel: matchedSchedule?.name ?? 'Sem jornada',
       active,
@@ -312,6 +333,7 @@ const TEMPLATE_SAMPLE_ROWS = [
     Nome: 'JOÃO DA SILVA SANTOS',
     CPF: '123.456.789-01',
     Cargo: '040 - TRABALHADOR RURAL',
+    Nascimento: '15/05/1990',
     Admissão: '10/01/2026',
     Jornada: 'Trabalhador Rural 44h',
     Situação: 'Ativo',
@@ -321,6 +343,7 @@ const TEMPLATE_SAMPLE_ROWS = [
     Nome: 'MARIA OLIVEIRA SOUZA',
     CPF: '987.654.321-09',
     Cargo: '042 - OPERADOR DE MÁQUINAS',
+    Nascimento: '22/11/1988',
     Admissão: '01/03/2026',
     Jornada: 'Trabalhador Rural 44h',
     Situação: 'Ativo',
@@ -335,6 +358,7 @@ export function downloadEmployeeTemplateXlsx(): void {
     { wch: 18 },
     { wch: 28 },
     { wch: 14 },
+    { wch: 14 },
     { wch: 26 },
     { wch: 12 },
   ];
@@ -344,11 +368,22 @@ export function downloadEmployeeTemplateXlsx(): void {
 }
 
 export function downloadEmployeeTemplateCsv(): void {
-  const headers = ['Registro', 'Nome', 'CPF', 'Cargo', 'Admissão', 'Jornada', 'Situação'];
+  const headers = [
+    'Registro',
+    'Nome',
+    'CPF',
+    'Cargo',
+    'Nascimento',
+    'Admissão',
+    'Jornada',
+    'Situação',
+  ];
   const lines = [
     headers.join(';'),
     ...TEMPLATE_SAMPLE_ROWS.map((r) =>
-      [r.Registro, r.Nome, r.CPF, r.Cargo, r.Admissão, r.Jornada, r.Situação].join(';')
+      [r.Registro, r.Nome, r.CPF, r.Cargo, r.Nascimento, r.Admissão, r.Jornada, r.Situação].join(
+        ';'
+      )
     ),
   ];
   const blob = new Blob(['\uFEFF' + lines.join('\r\n')], {

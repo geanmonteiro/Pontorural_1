@@ -68,12 +68,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [localError, setLocalError] = useState<string | null>(null);
 
   const navigateTo = (nextView: AuthScreenView) => {
-    // Regra comercial: criar conta só após escolher um plano
     if (nextView === 'register' && !selectedPlan) {
-      setView('plans');
-    } else {
-      setView(nextView);
+      setSelectedPlan(SUBSCRIPTION_PLANS[0]);
     }
+    setView(nextView);
     setLocalError(null);
     onClearFeedback();
   };
@@ -235,9 +233,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => navigateTo('register')}
+            className={`whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+              view === 'register'
+                ? 'text-slate-900 underline underline-offset-4'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            Criar Usuário
+          </button>
+          <button
+            type="button"
             onClick={() => navigateTo('plans')}
             className={`whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-              view === 'plans' || view === 'register'
+              view === 'plans'
                 ? 'text-slate-900 underline underline-offset-4'
                 : 'hover:text-slate-900'
             }`}
@@ -258,10 +267,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           ) : (
             <button
               type="button"
-              onClick={() => navigateTo('plans')}
+              onClick={() => navigateTo('register')}
               className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold whitespace-nowrap cursor-pointer"
             >
-              Contratar Plano
+              Criar Usuário
             </button>
           )}
         </div>
@@ -405,29 +414,46 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             <div className="lg:col-span-6">
               <div className="bg-white border border-slate-200 rounded-xl p-7 sm:p-9 shadow-sm max-w-md w-full mx-auto lg:mx-0 space-y-6">
                 {view === 'register' && selectedPlan && (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3.5 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-xs text-emerald-800 font-medium">
-                        Passo 2 de 2 · Plano {selectedPlan.name}
-                      </div>
-                      <div className="text-xs font-mono-tabular text-slate-700 mt-0.5">
-                        R${' '}
-                        {formatBrlPrice(
-                          billingCycle === 'monthly'
-                            ? selectedPlan.monthlyPrice
-                            : selectedPlan.yearlyMonthlyEquivalent
-                        )}
-                        /mês ({billingCycle === 'monthly' ? 'Mensal' : 'Anual'})
-                      </div>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-emerald-800 font-medium">
+                        Plano da Conta
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => navigateTo('plans')}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:underline shrink-0 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        Comparar planos
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => navigateTo('plans')}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:underline shrink-0 cursor-pointer"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      Alterar
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        aria-label="Selecionar plano"
+                        value={selectedPlan.id}
+                        onChange={(e) => {
+                          const found = SUBSCRIPTION_PLANS.find((p) => p.id === e.target.value);
+                          if (found) setSelectedPlan(found);
+                        }}
+                        className="rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900"
+                      >
+                        {SUBSCRIPTION_PLANS.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} (R$ {formatBrlPrice(billingCycle === 'monthly' ? p.monthlyPrice : p.yearlyMonthlyEquivalent)}/mês)
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="Periodicidade"
+                        value={billingCycle}
+                        onChange={(e) => setBillingCycle(e.target.value as BillingCycle)}
+                        className="rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900"
+                      >
+                        <option value="monthly">Cobrança Mensal</option>
+                        <option value="yearly">Cobrança Anual (20% off)</option>
+                      </select>
+                    </div>
                   </div>
                 )}
 
@@ -612,10 +638,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       Ainda não tem acesso?{' '}
                       <button
                         type="button"
-                        onClick={() => navigateTo('plans')}
+                        onClick={() => navigateTo('register')}
                         className="font-semibold text-emerald-700 hover:underline cursor-pointer"
                       >
-                        Escolha um plano para criar conta
+                        Criar novo usuário
                       </button>
                     </div>
                   )}

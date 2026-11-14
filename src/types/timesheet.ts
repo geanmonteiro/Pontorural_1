@@ -102,6 +102,20 @@ export interface GeneratedDayRow {
   col7Text: string; // "13:00" or ""
 }
 
+export type TeamUserRole = 'admin' | 'rh' | 'operador';
+
+export interface TeamUser {
+  id: string;
+  ownerId: string;
+  authUid: string;
+  displayName: string;
+  email: string;
+  role: TeamUserRole;
+  active: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
 export const FIELD_LIMITS = {
   companyNameMax: 160,
   cnpjMax: 24,
@@ -114,4 +128,6 @@ export const FIELD_LIMITS = {
   cpfMax: 20,
   registrationMax: 32,
   holidayNameMax: 100,
+  teamUserNameMax: 120,
+  teamUserEmailMax: 160,
 } as const;

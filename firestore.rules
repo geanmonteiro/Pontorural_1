@@ -131,6 +131,19 @@ service cloud.firestore {
         && data.appliedAt is timestamp;
     }
 
+    function isValidTeamUser(data, userId) {
+      return data.keys().hasAll(['ownerId', 'authUid', 'displayName', 'email', 'role', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'authUid', 'displayName', 'email', 'role', 'active', 'createdAt', 'updatedAt'])
+        && data.ownerId is string && data.ownerId == userId && data.ownerId.size() <= 128
+        && isValidId(data.authUid)
+        && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 120
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.role in ['admin', 'rh', 'operador']
+        && data.active is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow list, create, update, delete: if false;
@@ -256,6 +269,24 @@ service cloud.firestore {
           && incoming().updatedAt == request.time
           && incoming().diff(existing()).affectedKeys().hasOnly(['dayOverrides', 'updatedAt']);
         allow delete: if isOwner(userId) && isValidId(overrideId) && existing().ownerId == request.auth.uid;
+      }
+
+      match /teamUsers/{teamUserId} {
+        allow get: if isOwner(userId) && isValidId(teamUserId) && (resource == null || existing().ownerId == request.auth.uid);
+        allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isOwner(userId) && isValidId(teamUserId)
+          && isValidTeamUser(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isOwner(userId) && isValidId(teamUserId)
+          && isValidTeamUser(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().authUid == existing().authUid
+          && incoming().email == existing().email
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'active', 'updatedAt']);
+        allow delete: if isOwner(userId) && isValidId(teamUserId) && existing().ownerId == request.auth.uid;
       }
     }
   }

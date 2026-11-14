@@ -1,11 +1,47 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import {
+  createUserWithEmailAndPassword,
+  getAuth,
+  inMemoryPersistence,
+  sendEmailVerification,
+  setPersistence,
+  signOut,
+  updateProfile,
+} from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().some((a) => a.name === '[DEFAULT]') ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+
+export async function createSecondaryAuthUser(params: {
+  displayName: string;
+  email: string;
+  password: string;
+}): Promise<string> {
+  const SECONDARY_NAME = 'team-user-creator';
+  const secondaryApp = getApps().some((a) => a.name === SECONDARY_NAME)
+    ? getApp(SECONDARY_NAME)
+    : initializeApp(firebaseConfig, SECONDARY_NAME);
+  const secondaryAuth = getAuth(secondaryApp);
+  await setPersistence(secondaryAuth, inMemoryPersistence);
+
+  const cred = await createUserWithEmailAndPassword(
+    secondaryAuth,
+    params.email.trim(),
+    params.password
+  );
+  try {
+    if (params.displayName.trim()) {
+      await updateProfile(cred.user, { displayName: params.displayName.trim() });
+    }
+    await sendEmailVerification(cred.user);
+    return cred.user.uid;
+  } finally {
+    await signOut(secondaryAuth).catch(() => undefined);
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',

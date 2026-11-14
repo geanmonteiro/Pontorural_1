@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FileSpreadsheet, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
+import { FileSpreadsheet, Pencil, Plus, Search, Trash2, Upload, Users } from 'lucide-react';
 import { Company, Employee, FIELD_LIMITS, Schedule } from '../types/timesheet';
 import { formatCpfInput, formatDateBr } from '../utils/holidays';
 
@@ -22,6 +22,7 @@ interface EmployeesViewProps {
   onGenerateForEmployee: (employeeId: string) => void;
   onGoToCompanies: () => void;
   onGoToSchedules: () => void;
+  onOpenImport?: () => void;
 }
 
 export const EmployeesView: React.FC<EmployeesViewProps> = ({
@@ -33,6 +34,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
   onGenerateForEmployee,
   onGoToCompanies,
   onGoToSchedules,
+  onOpenImport,
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -197,14 +199,26 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
             Gerencie os colaboradores admitidos e gere a folha de ponto individual ou em lote.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openNew}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          Admitir Funcionário
-        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {onOpenImport && (
+            <button
+              type="button"
+              onClick={onOpenImport}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer"
+            >
+              <Upload className="w-4 h-4 text-slate-500" />
+              Importar Planilha
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={openNew}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Admitir Funcionário
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -399,13 +413,25 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
           <p className="text-sm text-slate-600 max-w-md mx-auto">
             Cadastre o primeiro trabalhador admitido para emitir sua folha de ponto em segundos.
           </p>
-          <button
-            type="button"
-            onClick={openNew}
-            className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
-          >
-            Admitir Primeiro Funcionário
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={openNew}
+              className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
+            >
+              Admitir Primeiro Funcionário
+            </button>
+            {onOpenImport && (
+              <button
+                type="button"
+                onClick={onOpenImport}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold cursor-pointer"
+              >
+                <Upload className="w-4 h-4 text-slate-500" />
+                Importar Planilha
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">

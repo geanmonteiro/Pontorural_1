@@ -26,6 +26,7 @@ import {
 import {
   OperationType,
   auth,
+  createSecondaryAuthUser,
   db,
   handleFirestoreError,
   testFirestoreConnection,
@@ -38,12 +39,15 @@ import {
   FIELD_LIMITS,
   MonthOverride,
   Schedule,
+  TeamUser,
+  TeamUserRole,
 } from '../types/timesheet';
 import { BillingCycle, PlanId } from '../constants/plans';
 import {
   importBackupBundlesToFirestore,
   runUserMigrations,
 } from '../services/migrations';
+import { NormalizedEmployeeRow } from '../utils/employeeSpreadsheet';
 
 export interface UserSubscriptionData {
   planId: PlanId;
@@ -70,6 +74,7 @@ export function useTimesheetStore() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customHolidays, setCustomHolidays] = useState<CustomHoliday[]>([]);
   const [monthOverrides, setMonthOverrides] = useState<MonthOverride[]>([]);
+  const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
   const [subscription, setSubscription] = useState<UserSubscriptionData | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
@@ -94,6 +99,7 @@ export function useTimesheetStore() {
       setEmployees([]);
       setCustomHolidays([]);
       setMonthOverrides([]);
+      setTeamUsers([]);
       setSubscription(null);
       setDataLoading(false);
       return;
@@ -110,6 +116,7 @@ export function useTimesheetStore() {
       employees: false,
       holidays: false,
       overrides: false,
+      teamUsers: false,
       subscription: false,
     };
 
@@ -121,6 +128,7 @@ export function useTimesheetStore() {
         loadedFlags.employees &&
         loadedFlags.holidays &&
         loadedFlags.overrides &&
+        loadedFlags.teamUsers &&
         loadedFlags.subscription
       ) {
         setDataLoading(false);
@@ -231,6 +239,22 @@ export function useTimesheetStore() {
             checkDone();
           },
           (error) => handleFirestoreError(error, OperationType.GET, overridesPath)
+        )
+      );
+
+      const teamUsersPath = `users/${uid}/teamUsers`;
+      unsubs.push(
+        onSnapshot(
+          query(collection(db, teamUsersPath), where('ownerId', '==', uid)),
+          (snap) => {
+            const list = snap.docs
+              .map((d) => ({ id: d.id, ...(d.data() as Omit<TeamUser, 'id'>) }))
+              .sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
+            setTeamUsers(list);
+            loadedFlags.teamUsers = true;
+            checkDone();
+          },
+          (error) => handleFirestoreError(error, OperationType.GET, teamUsersPath)
         )
       );
 
@@ -858,6 +882,163 @@ export function useTimesheetStore() {
     [user]
   );
 
+  const importEmployeesBatch = useCallback(
+    async (params: {
+      companyId: string;
+      rows: NormalizedEmployeeRow[];
+      duplicateStrategy: 'update' | 'skip';
+      onProgress?: (done: number, total: number) => void;
+    }) => {
+      if (!user) throw new Error('Usuário não autenticado.');
+      const uid = user.uid;
+      const total = params.rows.length;
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      for (let i = 0; i < total; i++) {
+        const row = params.rows[i];
+        if (row.errors.length > 0 || !row.scheduleId) {
+          skipped++;
+          params.onProgress?.(i + 1, total);
+          continue;
+        }
+
+        if (row.existingEmployeeId && params.duplicateStrategy === 'skip') {
+          skipped++;
+          params.onProgress?.(i + 1, total);
+          continue;
+        }
+
+        const empId = row.existingEmployeeId || crypto.randomUUID();
+        const docPath = `users/${uid}/employees/${empId}`;
+        const baseFields = {
+          scheduleId: row.scheduleId,
+          name: sanitizeString(row.name.toUpperCase(), FIELD_LIMITS.employeeNameMax),
+          role: sanitizeString(row.role.toUpperCase(), FIELD_LIMITS.employeeRoleMax),
+          cpf: sanitizeString(row.cpf, FIELD_LIMITS.cpfMax),
+          registrationNumber: sanitizeString(
+            row.registrationNumber,
+            FIELD_LIMITS.registrationMax
+          ),
+          admissionDate: row.admissionDate,
+          active: Boolean(row.active),
+        };
+
+        try {
+          if (row.existingEmployeeId) {
+            await updateDoc(doc(db, docPath), {
+              ...baseFields,
+              updatedAt: serverTimestamp(),
+            });
+            updated++;
+          } else {
+            await setDoc(doc(db, docPath), {
+              ownerId: uid,
+              companyId: params.companyId,
+              ...baseFields,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+            created++;
+          }
+        } catch (error) {
+          handleFirestoreError(
+            error,
+            row.existingEmployeeId ? OperationType.UPDATE : OperationType.CREATE,
+            docPath
+          );
+        }
+
+        params.onProgress?.(i + 1, total);
+      }
+
+      return { created, updated, skipped };
+    },
+    [user]
+  );
+
+  const createTeamUser = useCallback(
+    async (input: {
+      displayName: string;
+      email: string;
+      password: string;
+      role: TeamUserRole;
+      active: boolean;
+    }) => {
+      if (!user) throw new Error('Usuário não autenticado.');
+      const uid = user.uid;
+      const cleanName = sanitizeString(input.displayName, FIELD_LIMITS.teamUserNameMax);
+      const cleanEmail = sanitizeString(input.email.toLowerCase(), FIELD_LIMITS.teamUserEmailMax);
+
+      let createdAuthUid = '';
+      try {
+        createdAuthUid = await createSecondaryAuthUser({
+          displayName: cleanName,
+          email: cleanEmail,
+          password: input.password,
+        });
+      } catch (err: unknown) {
+        throw new Error(mapAuthError(err));
+      }
+
+      const teamUserId = crypto.randomUUID();
+      const docPath = `users/${uid}/teamUsers/${teamUserId}`;
+      try {
+        await setDoc(doc(db, docPath), {
+          ownerId: uid,
+          authUid: createdAuthUid,
+          displayName: cleanName,
+          email: cleanEmail,
+          role: input.role,
+          active: Boolean(input.active),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        return teamUserId;
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, docPath);
+      }
+    },
+    [user]
+  );
+
+  const updateTeamUser = useCallback(
+    async (input: {
+      id: string;
+      displayName: string;
+      role: TeamUserRole;
+      active: boolean;
+    }) => {
+      if (!user) throw new Error('Usuário não autenticado.');
+      const docPath = `users/${user.uid}/teamUsers/${input.id}`;
+      try {
+        await updateDoc(doc(db, docPath), {
+          displayName: sanitizeString(input.displayName, FIELD_LIMITS.teamUserNameMax),
+          role: input.role,
+          active: Boolean(input.active),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, docPath);
+      }
+    },
+    [user]
+  );
+
+  const deleteTeamUser = useCallback(
+    async (teamUserId: string) => {
+      if (!user) return;
+      const docPath = `users/${user.uid}/teamUsers/${teamUserId}`;
+      try {
+        await deleteDoc(doc(db, docPath));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, docPath);
+      }
+    },
+    [user]
+  );
+
   return {
     user,
     emailVerified,
@@ -871,6 +1052,7 @@ export function useTimesheetStore() {
     schedules,
     employees,
     customHolidays,
+    teamUsers,
     subscription,
     activeCompany,
     selectedCompanyId,
@@ -899,5 +1081,9 @@ export function useTimesheetStore() {
     seedExampleCompany,
     saveSubscriptionPlan,
     importBackupJson,
+    importEmployeesBatch,
+    createTeamUser,
+    updateTeamUser,
+    deleteTeamUser,
   };
 }

@@ -3,9 +3,11 @@ import { AuthScreen } from './components/AuthScreen';
 import { CompaniesView } from './components/CompaniesView';
 import { EmployeesView } from './components/EmployeesView';
 import { HolidaysView } from './components/HolidaysView';
+import { ImportEmployeesView } from './components/ImportEmployeesView';
 import { SchedulesView } from './components/SchedulesView';
 import { AppSection, Sidebar } from './components/Sidebar';
 import { TimesheetStudio } from './components/TimesheetStudio';
+import { UsersView } from './components/UsersView';
 import { useTimesheetStore } from './hooks/useTimesheetStore';
 import {
   downloadAllCompaniesBackupJson,
@@ -23,9 +25,11 @@ import { Check, LogOut, X } from 'lucide-react';
 const SECTION_TITLES: Record<AppSection, string> = {
   studio: 'Estúdio de Folhas A4',
   employees: 'Cadastro de Funcionários',
+  importEmployees: 'Importar Planilha de Funcionários',
   schedules: 'Jornadas de Trabalho',
   holidays: 'Feriados Nacionais e Locais',
   companies: 'Empresas e Fazendas',
+  users: 'Criação de Usuários',
 };
 
 export default function App() {
@@ -172,6 +176,19 @@ export default function App() {
                   }}
                   onGoToCompanies={() => setActiveSection('companies')}
                   onGoToSchedules={() => setActiveSection('schedules')}
+                  onOpenImport={() => setActiveSection('importEmployees')}
+                />
+              )}
+
+              {activeSection === 'importEmployees' && (
+                <ImportEmployeesView
+                  activeCompany={store.activeCompany}
+                  schedules={store.companySchedules}
+                  employees={store.companyEmployees}
+                  onImportEmployees={store.importEmployeesBatch}
+                  onGoToCompanies={() => setActiveSection('companies')}
+                  onGoToSchedules={() => setActiveSection('schedules')}
+                  onGoToEmployees={() => setActiveSection('employees')}
                 />
               )}
 
@@ -224,6 +241,17 @@ export default function App() {
                     })
                   }
                   onImportBackupJson={store.importBackupJson}
+                />
+              )}
+
+              {activeSection === 'users' && (
+                <UsersView
+                  currentUserEmail={store.user.email ?? ''}
+                  currentUserName={store.user.displayName ?? ''}
+                  teamUsers={store.teamUsers}
+                  onCreateUser={store.createTeamUser}
+                  onUpdateUser={store.updateTeamUser}
+                  onDeleteUser={store.deleteTeamUser}
                 />
               )}
             </>

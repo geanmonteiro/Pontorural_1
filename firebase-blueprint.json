@@ -327,6 +327,49 @@
         }
       },
       "required": ["ownerId", "version", "name", "status", "appliedAt"]
+    },
+    "TeamUser": {
+      "title": "TeamUser",
+      "description": "Usuário adicional criado para acesso ao sistema com perfil e e-mail cadastrado.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "authUid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 160
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "rh", "operador"]
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "authUid", "displayName", "email", "role", "active", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -357,6 +400,10 @@
     "/users/{userId}/migrations/{migrationId}": {
       "schema": { "$ref": "#/entities/MigrationRecord" },
       "description": "Histórico de migrações aplicadas no Firestore do usuário."
+    },
+    "/users/{userId}/teamUsers/{teamUserId}": {
+      "schema": { "$ref": "#/entities/TeamUser" },
+      "description": "Usuários adicionais criados dentro da conta."
     }
   }
 }

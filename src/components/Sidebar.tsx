@@ -7,11 +7,20 @@ import {
   Download,
   FileSpreadsheet,
   LogOut,
+  Upload,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { Company } from '../types/timesheet';
 
-export type AppSection = 'studio' | 'employees' | 'companies' | 'schedules' | 'holidays';
+export type AppSection =
+  | 'studio'
+  | 'employees'
+  | 'importEmployees'
+  | 'companies'
+  | 'schedules'
+  | 'holidays'
+  | 'users';
 
 interface SidebarProps {
   activeSection: AppSection;
@@ -30,9 +39,11 @@ interface SidebarProps {
 const NAV_ITEMS: { id: AppSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'studio', label: 'Gerar Folhas', icon: FileSpreadsheet },
   { id: 'employees', label: 'Funcionários', icon: Users },
+  { id: 'importEmployees', label: 'Importar Planilha', icon: Upload },
   { id: 'schedules', label: 'Jornadas', icon: Clock },
   { id: 'holidays', label: 'Feriados', icon: CalendarDays },
   { id: 'companies', label: 'Empresas', icon: Building2 },
+  { id: 'users', label: 'Usuários', icon: UserPlus },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({

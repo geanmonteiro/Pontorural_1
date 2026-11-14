@@ -11,8 +11,8 @@ interface PdfExportProgressModalProps {
 }
 
 const STAGE_TITLES: Record<PdfExportProgress['stage'], string> = {
-  preparing: 'Preparando folhas A4 e estilos de impressão...',
-  rendering: 'Renderizando páginas em alta resolução...',
+  preparing: 'Preparando folhas A4 e layout vetorial...',
+  rendering: 'Gerando páginas vetoriais em alta definição...',
   assembling: 'Montando documento PDF final...',
   saving: 'Iniciando download do arquivo...',
 };

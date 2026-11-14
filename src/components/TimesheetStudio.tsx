@@ -31,7 +31,7 @@ import {
 } from '../utils/holidays';
 import {
   PdfExportProgress,
-  exportA4SheetsToPdf,
+  exportTimesheetSheetsToPdf,
   sanitizeFilename,
 } from '../utils/pdfExport';
 import { PdfExportProgressModal } from './PdfExportProgressModal';
@@ -100,7 +100,6 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportProgress, setExportProgress] = useState<PdfExportProgress | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const exportContainerRef = useRef<HTMLDivElement | null>(null);
   const exportAbortRef = useRef<AbortController | null>(null);
 
   const [calibration, setCalibration] = useState<PrintCalibration>(() => {
@@ -295,31 +294,21 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
     });
 
     try {
-      // Wait for off-screen export sheets to mount cleanly in DOM
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-      );
-
-      if (controller.signal.aborted) return;
-
-      const container = exportContainerRef.current;
-      if (!container) {
-        throw new Error('Não foi possível preparar as folhas para exportação.');
-      }
-
-      const sheetElements = Array.from(
-        container.querySelectorAll<HTMLElement>('.a4-sheet')
-      );
-      const sheetLabels = employeesToPrint.map((emp) => emp.name);
-
       const baseLabel =
         mode === 'single' && employeesToPrint[0]
           ? `Folha_Ponto_${sanitizeFilename(employeesToPrint[0].name)}_${yearMonthKey}.pdf`
           : `Folhas_Ponto_${sanitizeFilename(activeCompany.name)}_${yearMonthKey}.pdf`;
 
-      await exportA4SheetsToPdf({
-        sheetElements,
-        sheetLabels,
+      await exportTimesheetSheetsToPdf({
+        company: activeCompany,
+        sheets: employeesToPrint.map((emp) => ({
+          employee: emp,
+          schedule: scheduleMap.get(emp.scheduleId),
+          rows: getRowsForEmployee(emp),
+        })),
+        year,
+        month,
+        calibration,
         filename: baseLabel,
         signal: controller.signal,
         onProgress: (nextProgress) => setExportProgress(nextProgress),
@@ -941,38 +930,6 @@ export const TimesheetStudio: React.FC<TimesheetStudioProps> = ({
           />
         ))}
       </div>
-
-      {/* Container temporário off-screen para captura exata em lote pelo html2pdf.js */}
-      {exportingPdf && (
-        <div
-          ref={exportContainerRef}
-          data-pdf-export-root="true"
-          aria-hidden="true"
-          className="no-print"
-          style={{
-            position: 'fixed',
-            left: '-10000px',
-            top: 0,
-            width: '210mm',
-            backgroundColor: '#ffffff',
-            pointerEvents: 'none',
-            zIndex: -1,
-          }}
-        >
-          {employeesToPrint.map((emp) => (
-            <TimesheetA4Sheet
-              key={emp.id}
-              company={activeCompany}
-              employee={emp}
-              schedule={scheduleMap.get(emp.scheduleId)}
-              year={year}
-              month={month}
-              rows={getRowsForEmployee(emp)}
-              calibration={calibration}
-            />
-          ))}
-        </div>
-      )}
 
       <PdfExportProgressModal
         open={exportingPdf}

@@ -22,9 +22,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'essencial',
     name: 'Essencial',
     audience: 'Para fazendas e pequenas empresas',
-    monthlyPrice: 49,
-    yearlyMonthlyEquivalent: 39,
-    yearlyTotal: 468,
+    monthlyPrice: 20,
+    yearlyMonthlyEquivalent: 16,
+    yearlyTotal: 192,
     limits: {
       maxCompanies: 1,
       maxEmployees: 20,
@@ -42,9 +42,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'profissional',
     name: 'Profissional',
     audience: 'Para propriedades em expansão e RH interno',
-    monthlyPrice: 99,
-    yearlyMonthlyEquivalent: 79,
-    yearlyTotal: 948,
+    monthlyPrice: 49,
+    yearlyMonthlyEquivalent: 39,
+    yearlyTotal: 468,
     recommended: true,
     limits: {
       maxCompanies: 5,
@@ -63,9 +63,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'escritorio',
     name: 'Escritório Contábil',
     audience: 'Para contadores, BPO de RH e grupos empresariais',
-    monthlyPrice: 199,
-    yearlyMonthlyEquivalent: 159,
-    yearlyTotal: 1908,
+    monthlyPrice: 89,
+    yearlyMonthlyEquivalent: 71,
+    yearlyTotal: 852,
     limits: {
       maxCompanies: null,
       maxEmployees: null,
@@ -83,4 +83,11 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
 
 export function getPlanById(planId: PlanId | string | undefined | null): SubscriptionPlan {
   return SUBSCRIPTION_PLANS.find((p) => p.id === planId) ?? SUBSCRIPTION_PLANS[0];
+}
+
+export function formatBrlPrice(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }

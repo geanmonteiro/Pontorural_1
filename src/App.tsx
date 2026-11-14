@@ -15,6 +15,7 @@ import {
   BillingCycle,
   PlanId,
   SUBSCRIPTION_PLANS,
+  formatBrlPrice,
   getPlanById,
 } from './constants/plans';
 import { Check, LogOut, X } from 'lucide-react';
@@ -302,7 +303,7 @@ export default function App() {
                         <div className="text-xs text-slate-500">{plan.audience}</div>
                       </div>
                       <div className="font-display text-2xl font-bold font-mono-tabular text-slate-900">
-                        R$ {price}
+                        R$ {formatBrlPrice(price)}
                         <span className="text-xs font-normal text-slate-500"> /mês</span>
                       </div>
                       <ul className="space-y-1.5 text-xs text-slate-700">

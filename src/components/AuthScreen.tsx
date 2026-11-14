@@ -16,6 +16,7 @@ import {
   PlanId,
   SUBSCRIPTION_PLANS,
   SubscriptionPlan,
+  formatBrlPrice,
 } from '../constants/plans';
 
 interface AuthScreenProps {
@@ -348,13 +349,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                         <div className="flex items-baseline gap-1">
                           <span className="text-xs font-medium text-slate-500">R$</span>
                           <span className="font-display text-3xl font-bold font-mono-tabular text-slate-900">
-                            {price}
+                            {formatBrlPrice(price)}
                           </span>
                           <span className="text-xs text-slate-500">/ mês</span>
                         </div>
                         <div className="text-xs text-slate-500 mt-1 font-mono-tabular">
                           {billingCycle === 'yearly'
-                            ? `Cobrança anual de R$ ${plan.yearlyTotal}/ano`
+                            ? `Cobrança anual de R$ ${formatBrlPrice(plan.yearlyTotal)}/ano`
                             : 'Cobrança mensal sem fidelidade'}
                         </div>
                       </div>
@@ -411,9 +412,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       </div>
                       <div className="text-xs font-mono-tabular text-slate-700 mt-0.5">
                         R${' '}
-                        {billingCycle === 'monthly'
-                          ? selectedPlan.monthlyPrice
-                          : selectedPlan.yearlyMonthlyEquivalent}
+                        {formatBrlPrice(
+                          billingCycle === 'monthly'
+                            ? selectedPlan.monthlyPrice
+                            : selectedPlan.yearlyMonthlyEquivalent
+                        )}
                         /mês ({billingCycle === 'monthly' ? 'Mensal' : 'Anual'})
                       </div>
                     </div>
